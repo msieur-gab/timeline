@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prototype Directory</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f8f9fa;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 300;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 1.1rem;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .toggle-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .toggle-btn:hover {
+            background: #2980b9;
+        }
+
+        .toggle-btn.active {
+            background: #e74c3c;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .list {
+            display: block;
+        }
+
+        .prototype-card {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .prototype-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .list .prototype-card {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .preview-container {
+            position: relative;
+            height: 200px;
+            background: #ecf0f1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .list .preview-container {
+            width: 100px;
+            height: 60px;
+            margin-right: 1rem;
+            flex-shrink: 0;
+        }
+
+        .preview-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            transform: scale(0.25);
+            transform-origin: top left;
+            width: 400%;
+            height: 400%;
+        }
+
+        .list .preview-iframe {
+            transform: scale(0.15);
+            width: 667%;
+            height: 667%;
+        }
+
+        .preview-placeholder {
+            color: #95a5a6;
+            font-size: 3rem;
+        }
+
+        .list .preview-placeholder {
+            font-size: 1.5rem;
+        }
+
+        .card-content {
+            padding: 1.5rem;
+        }
+
+        .list .card-content {
+            padding: 0;
+            flex-grow: 1;
+        }
+
+        .prototype-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+
+        .list .prototype-title {
+            margin-bottom: 0.25rem;
+        }
+
+        .prototype-description {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .list .prototype-description {
+            margin-bottom: 0.5rem;
+        }
+
+        .prototype-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .btn-secondary {
+            background: #ecf0f1;
+            color: #34495e;
+        }
+
+        .btn-secondary:hover {
+            background: #d5dbdb;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #7f8c8d;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .list .prototype-card {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .list .preview-container {
+                margin-right: 0;
+                margin-bottom: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Prototype Directory</h1>
+            <p class="subtitle">Explore interactive prototypes and experiments</p>
+        </header>
+
+        <div class="controls">
+            <button class="toggle-btn" id="layoutToggle">Switch to List View</button>
+            <button class="toggle-btn" id="previewToggle">Toggle Previews</button>
+        </div>
+
+        <div id="prototypes" class="grid">
+            <div class="loading">Loading prototypes...</div>
+        </div>
+    </div>
+
+    <script>
+        // CONFIGURATION: Add your prototypes here
+        const prototypes = [
+            {
+                file: 'improved_memory_app (5).html',
+                title: 'improved_memory_app v5',
+                description: 'A CSS3 and JavaScript animation prototype'
+            },
+            {
+                file: 'improved_memory_app.html',
+                title: 'improved_memory_app',
+                description: 'A CSS3 and JavaScript animation prototype'
+            },
+            {
+                file: 'mono_kid_dexie_combo.html',
+                title: 'mono_kid_dexie_combo',
+                description: 'Chart and graph experiments with vanilla JS'
+            },
+            {
+                file: 'mono_kid_dexie_shrinking_timeline.html',
+                title: 'mono_kid_dexie_shrinking_timeline',
+                description: 'Reusable component library prototype'
+            },
+             {
+                file: 'multi_kid_shrinking_timeline.html',
+                title: 'multi_kid_shrinking_timeline',
+                description: 'Reusable component library prototype'
+            }
+            // Add more prototypes here following the same structure
+        ];
+
+        class PrototypeIndex {
+            constructor() {
+                this.showPreviews = true;
+                this.isGridView = true;
+                this.container = document.getElementById('prototypes');
+                this.layoutToggle = document.getElementById('layoutToggle');
+                this.previewToggle = document.getElementById('previewToggle');
+                
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+                this.render();
+            }
+
+            setupEventListeners() {
+                this.layoutToggle.addEventListener('click', () => {
+                    this.toggleLayout();
+                });
+
+                this.previewToggle.addEventListener('click', () => {
+                    this.togglePreviews();
+                });
+            }
+
+            toggleLayout() {
+                this.isGridView = !this.isGridView;
+                this.layoutToggle.textContent = this.isGridView ? 'Switch to List View' : 'Switch to Grid View';
+                this.container.className = this.isGridView ? 'grid' : 'list';
+                this.render();
+            }
+
+            togglePreviews() {
+                this.showPreviews = !this.showPreviews;
+                this.previewToggle.classList.toggle('active', !this.showPreviews);
+                this.previewToggle.textContent = this.showPreviews ? 'Hide Previews' : 'Show Previews';
+                this.render();
+            }
+
+            createPreviewElement(file) {
+                const container = document.createElement('div');
+                container.className = 'preview-container';
+
+                if (this.showPreviews) {
+                    // Try to load preview, fallback to placeholder
+                    const iframe = document.createElement('iframe');
+                    iframe.className = 'preview-iframe';
+                    iframe.src = file;
+                    iframe.loading = 'lazy';
+                    
+                    iframe.onerror = () => {
+                        container.innerHTML = '<div class="preview-placeholder">📄</div>';
+                    };
+                    
+                    container.appendChild(iframe);
+                } else {
+                    container.innerHTML = '<div class="preview-placeholder">📄</div>';
+                }
+
+                return container;
+            }
+
+            createPrototypeCard(prototype) {
+                const card = document.createElement('div');
+                card.className = 'prototype-card';
+
+                const preview = this.createPreviewElement(prototype.file);
+                const content = document.createElement('div');
+                content.className = 'card-content';
+
+                content.innerHTML = `
+                    <h3 class="prototype-title">${prototype.title}</h3>
+                    <p class="prototype-description">${prototype.description}</p>
+                    <div class="prototype-actions">
+                        <a href="${prototype.file}" class="btn btn-primary" target="_blank">Open</a>
+                        <a href="${prototype.file}" class="btn btn-secondary">View Source</a>
+                    </div>
+                `;
+
+                card.appendChild(preview);
+                card.appendChild(content);
+
+                return card;
+            }
+
+            async checkFileExists(file) {
+                try {
+                    const response = await fetch(file, { method: 'HEAD' });
+                    return response.ok;
+                } catch {
+                    return false;
+                }
+            }
+
+            async render() {
+                this.container.innerHTML = '<div class="loading">Loading prototypes...</div>';
+
+                if (prototypes.length === 0) {
+                    this.container.innerHTML = `
+                        <div style="text-align: center; padding: 2rem; color: #7f8c8d;">
+                            <h3>No prototypes configured</h3>
+                            <p>Add your prototype files to the 'prototypes' array in the JavaScript section.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const fragment = document.createDocumentFragment();
+
+                for (const prototype of prototypes) {
+                    const exists = await this.checkFileExists(prototype.file);
+                    if (exists) {
+                        const card = this.createPrototypeCard(prototype);
+                        fragment.appendChild(card);
+                    }
+                }
+
+                this.container.innerHTML = '';
+                this.container.appendChild(fragment);
+
+                if (this.container.children.length === 0) {
+                    this.container.innerHTML = `
+                        <div style="text-align: center; padding: 2rem; color: #7f8c8d;">
+                            <h3>No prototype files found</h3>
+                            <p>Make sure your HTML files are in the same directory as this index.</p>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            new PrototypeIndex();
+        });
+    </script>
+</body>
+</html>
