@@ -1,0 +1,467 @@
+/* CSS Custom Properties for theming */
+:root {
+  /* Colors */
+  --color-primary: #007AFF;
+  --color-primary-dark: #0056CC;
+  --color-secondary: #6b7280;
+  --color-background: #f0f0f0;
+  --color-surface: #e8e8e8;
+  --color-text: #333;
+  --color-text-light: #666;
+  --color-text-white: #fff;
+  --color-border: #ddd;
+  --color-error: #dc3545;
+  --color-success: #28a745;
+  
+  /* Header gradient */
+  --header-gradient: linear-gradient(135deg, #9e9e9e 0%, #757575 100%);
+  
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 20px;
+  --spacing-xl: 24px;
+  
+  /* Typography */
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-size-sm: 0.75rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.2rem;
+  --font-size-xl: 2rem;
+  --font-size-xxl: 6rem;
+  
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.3s ease;
+  --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* Shadows */
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
+  --shadow-md: 0 4px 20px rgba(0,0,0,0.15);
+  --shadow-lg: 0 10px 40px rgba(0,0,0,0.3);
+  
+  /* Border radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 50%;
+}
+
+/* CSS Reset and Base Styles */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  line-height: 1.5;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--color-background);
+  color: var(--color-text);
+  min-height: 100vh;
+  height: 100vh; /* Ensure full viewport height */
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Skip link for accessibility */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 6px;
+  background: var(--color-primary);
+  color: var(--color-text-white);
+  padding: 8px;
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  z-index: 1000;
+}
+
+.skip-link:focus {
+  top: 6px;
+}
+
+/* Fixed Navigation Bar */
+.app-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: transparent; /* Transparent to show gradient */
+  padding: 12px 20px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  z-index: 100;
+  height: 60px;
+  box-sizing: border-box;
+  pointer-events: none; /* Allow clicks to pass through empty areas */
+}
+
+.app-nav > * {
+  pointer-events: auto; /* Re-enable clicks on buttons */
+}
+
+/* App Header */
+.app-header {
+  background: var(--header-gradient);
+  color: var(--color-text-white);
+  position: relative;
+  transition: all var(--transition-slow);
+  flex-shrink: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start; /* Left-align like original */
+  padding: var(--spacing-md) var(--spacing-lg);
+  min-height: 80px;
+  padding-top: 60px; /* Space for transparent nav overlay */
+}
+
+/* Expanded state - large header */
+.app-header.expanded {
+  padding: 100px var(--spacing-lg) 60px !important; /* Extra top padding for nav */
+  min-height: 70vh !important;
+  align-items: center !important;
+  justify-content: flex-start !important; /* Keep left-aligned */
+}
+
+/* Collapsed state - small header */
+.app-header.collapsed {
+  padding: 70px var(--spacing-lg) var(--spacing-md) !important; /* Top padding for nav */
+  min-height: 120px !important; /* Slightly taller to account for nav */
+  align-items: center !important;
+  justify-content: flex-start !important; /* Keep left-aligned */
+}
+
+/* Activity Summary */
+.activity-summary {
+  flex: 1; /* Take available space */
+  text-align: left; /* Left-align like original */
+  transition: var(--transition-slow);
+}
+
+.entries-count {
+  font-weight: 200;
+  line-height: 0.9;
+  color: var(--color-text-white);
+  transition: var(--transition-slow);
+  font-size: var(--font-size-xl);
+  margin-bottom: var(--spacing-xs);
+}
+
+.app-header.expanded .entries-count {
+  font-size: 8rem; /* Even larger for the big header */
+  margin-bottom: var(--spacing-lg);
+}
+
+.entries-subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 400;
+  font-size: var(--font-size-sm);
+  line-height: 1.2;
+  transition: var(--transition-slow);
+}
+
+.app-header.expanded .entries-subtitle {
+  font-size: 1.1rem; /* Slightly larger subtitle */
+  line-height: 1.4;
+}
+
+.app-header.expanded .collapsed-text,
+.app-header.collapsed .expanded-text {
+  display: none !important;
+}
+
+.app-header.expanded .expanded-text,
+.app-header.collapsed .collapsed-text {
+  display: inline !important;
+}
+
+/* Default state (when no class specified, treat as expanded) */
+.app-header:not(.collapsed) .collapsed-text {
+  display: none !important;
+}
+
+.app-header:not(.collapsed) .expanded-text {
+  display: inline !important;
+}
+
+/* Navigation Controls */
+.toggle-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: var(--color-text-white);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.toggle-btn.active {
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--color-text);
+  border-color: rgba(255, 255, 255, 0.9);
+}
+
+.control-btn {
+  background: rgba(255, 255, 255, 0.3);
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: var(--transition-normal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-white);
+  width: 30px;
+  height: 30px;
+  font-size: 16px;
+}
+
+.control-btn:hover {
+  background: rgba(255, 255, 255, 0.4);
+  transform: scale(1.05);
+}
+
+.control-btn:active {
+  transform: scale(0.95);
+}
+
+/* Main Content Area */
+.app-main {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* Important for flex child to be scrollable */
+}
+
+/* Activity Calendar (web component will handle internal styles) */
+activity-calendar {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+/* Loading Indicator */
+.loading-indicator {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  transition: opacity var(--transition-normal);
+}
+
+.loading-indicator[aria-hidden="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--color-border);
+  border-top: 3px solid var(--color-primary);
+  border-radius: var(--radius-full);
+  animation: spin 1s linear infinite;
+  margin-bottom: var(--spacing-md);
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Error Message */
+.error-message {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--color-text-white);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xl);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+  max-width: 400px;
+  width: 90%;
+  z-index: 1001;
+  transition: opacity var(--transition-normal);
+}
+
+.error-message[aria-hidden="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.error-message h2 {
+  color: var(--color-error);
+  margin-bottom: var(--spacing-md);
+  font-size: var(--font-size-lg);
+}
+
+.error-message p {
+  margin-bottom: var(--spacing-lg);
+  color: var(--color-text-light);
+}
+
+/* Button Styles */
+.btn {
+  background: var(--color-primary);
+  color: var(--color-text-white);
+  border: none;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  transition: var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.btn:hover {
+  background: var(--color-primary-dark);
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn.secondary {
+  background: var(--color-secondary);
+}
+
+.btn.danger {
+  background: var(--color-error);
+}
+
+/* Focus styles for accessibility */
+button:focus-visible,
+.btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .app-nav {
+    padding: 8px 16px;
+    height: 50px;
+  }
+  
+  .app-header {
+    padding-top: 50px; /* Account for smaller nav on mobile */
+    padding-left: var(--spacing-md);
+    padding-right: var(--spacing-md);
+    padding-bottom: 12px;
+    min-height: 70px;
+  }
+  
+  .app-header.expanded {
+    padding: 70px var(--spacing-md) 40px !important;
+    min-height: 60vh !important;
+  }
+  
+  .app-header.collapsed {
+    padding: 60px var(--spacing-md) 12px !important;
+    min-height: 100px !important;
+  }
+  
+  .entries-count {
+    font-size: 1.6rem;
+  }
+  
+  .app-header.expanded .entries-count {
+    font-size: 5rem; /* Large but appropriate for mobile */
+  }
+  
+  .entries-subtitle {
+    font-size: 0.65rem;
+  }
+  
+  .app-header.expanded .entries-subtitle {
+    font-size: 1rem;
+  }
+  
+  .control-btn {
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
+  }
+  
+  .toggle-btn {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+}
+
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .loading-spinner {
+    animation: none;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --color-border: #000;
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 20px rgba(0,0,0,0.4);
+  }
+}
+
+/* Dark mode preparation (for future implementation) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #1a1a1a;
+    --color-surface: #2a2a2a;
+    --color-text: #ffffff;
+    --color-text-light: #cccccc;
+    --color-border: #444;
+  }
+}

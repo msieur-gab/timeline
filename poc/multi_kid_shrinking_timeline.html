@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emma's Memory Header</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #B8BCC4;
+            --bg-secondary: #E8E8E8;
+            --text-primary: #FFFFFF;
+            --text-secondary: #666666;
+            --memory-active: #9E9E9E;
+            
+            /* Dynamic height controls */
+            --initial-header-vh: 100;
+            --min-header-px: 80;
+            --scroll-distance-for-full-effect: 500;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-primary);
+            margin: 0;
+            color: #333;
+            transition: background-color 0.3s ease;
+        }
+
+        /* EXACT ORIGINAL STRUCTURE - Main container sticky */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            left: 0;
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            overflow: hidden;
+        }
+
+        /* EXACT ORIGINAL - Header Section Shrinks */
+        .header-section {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            min-height: 80px;
+            overflow: hidden;
+            transition: height 0.05s linear, background 0.3s ease;
+            will-change: height;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .header-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px 40px 20px;
+            position: relative;
+            width: 100%;
+        }
+
+        /* Header controls */
+        .header-controls {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .toggle-btn {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+            touch-action: manipulation;
+        }
+
+        .toggle-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .toggle-btn.active {
+            background: rgba(255,255,255,0.9);
+            color: #333;
+        }
+
+        /* Kid indicators */
+        .kid-indicators {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            display: flex;
+            gap: 6px;
+            z-index: 10;
+        }
+
+        .kid-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.4);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .kid-dot.active {
+            background: white;
+            transform: scale(1.4);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        /* Initial content (visible when expanded) */
+        .initial-content {
+            display: block;
+            text-align: center;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .kid-photo {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23E8E8E8"/><circle cx="70" cy="55" r="20" fill="%23B8BCC4" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%23B8BCC4" opacity="0.7"/></svg>');
+            background-size: cover;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+
+        .kid-name {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .kid-age {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 40px;
+            transition: all 0.3s ease;
+        }
+
+        .stats {
+            display: flex;
+            gap: 60px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 5rem;
+            font-weight: 200;
+            line-height: 0.8;
+            margin-bottom: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            opacity: 0.9;
+            line-height: 1.4;
+        }
+
+        .scroll-hint {
+            margin-top: 40px;
+            opacity: 0.8;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .scroll-hint::after {
+            content: '↓';
+            display: block;
+            text-align: center;
+            margin-top: 8px;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-8px); }
+            60% { transform: translateY(-4px); }
+        }
+
+        /* Compact content (visible when shrunk) */
+        .compact-content {
+            display: none;
+            align-items: center;
+            width: calc(100% - 3rem);
+            position: absolute;
+            top: 50%;
+            left: 1.5rem;
+            transform: translateY(-50%);
+            pointer-events: none;
+            transform-origin: left center;
+        }
+
+        .compact-photo {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="%23E8E8E8"/><circle cx="16" cy="12" r="4" fill="%23B8BCC4" opacity="0.7"/><ellipse cx="16" cy="22" rx="6" ry="4" fill="%23B8BCC4" opacity="0.7"/></svg>');
+            background-size: cover;
+            margin-right: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .compact-text {
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .compact-text .stat-number {
+            display: inline;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-right: 0.25rem;
+        }
+
+        .compact-text .stat-label {
+            display: inline;
+            font-size: 0.9rem;
+        }
+
+        /* EXACT ORIGINAL - Content Section Takes remaining space */
+        .content-section {
+            background: var(--bg-secondary);
+            padding: 0;
+            height: 0;
+            max-height: 0;
+            overflow: hidden;
+            transition: height 0.05s linear, max-height 0.05s linear;
+            will-change: height;
+            flex-shrink: 0;
+        }
+
+        .timeline-container {
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: var(--bg-secondary);
+        }
+
+        .timeline-header {
+            text-align: center;
+            padding: 20px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+
+        .timeline-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .timeline-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .timeline-content {
+            padding: 2rem;
+            background: white;
+            border-radius: 12px 12px 0 0;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+            min-height: 200vh;
+        }
+
+        .demo-card {
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            border-left: 4px solid var(--bg-primary);
+        }
+
+        .demo-card h3 {
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        .demo-card p {
+            color: #6b7280;
+            line-height: 1.6;
+        }
+
+        /* Kid switching carousel animations */
+        .app-container.sliding-left {
+            animation: slideOutLeft 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .app-container.sliding-right {
+            animation: slideOutRight 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .app-container.sliding-in-left {
+            animation: slideInLeft 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .app-container.sliding-in-right {
+            animation: slideInRight 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* Slide out animations */
+        @keyframes slideOutLeft {
+            0% {
+                transform: translateX(0);
+            }
+            100% {
+                transform: translateX(-100%);
+            }
+        }
+
+        @keyframes slideOutRight {
+            0% {
+                transform: translateX(0);
+            }
+            100% {
+                transform: translateX(100%);
+            }
+        }
+
+        /* Slide in animations */
+        @keyframes slideInLeft {
+            0% {
+                transform: translateX(100%);
+            }
+            100% {
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideInRight {
+            0% {
+                transform: translateX(-100%);
+            }
+            100% {
+                transform: translateX(0);
+            }
+        }
+
+        /* EXACT ORIGINAL - Scroll extender to provide scroll distance */
+        .scroll-extender {
+            height: 200vh;
+            background: transparent;
+            pointer-events: none;
+        }
+
+        /* Transition overlay to prevent white flash */
+        .transition-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: var(--bg-primary);
+            z-index: 9999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+        }
+
+        .transition-overlay.active {
+            opacity: 1;
+        }
+
+        /* Swipe indicator */
+        .swipe-indicator {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(158, 158, 158, 0.9);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 1001;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .swipe-indicator.show {
+            opacity: 1;
+        }
+
+        /* Floating add button */
+        .floating-add-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 50%;
+            transform: translateX(200px);
+            width: 60px;
+            height: 60px;
+            background: var(--bg-primary);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 8px 25px rgba(158, 158, 158, 0.4);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            touch-action: manipulation;
+        }
+
+        .floating-add-btn:hover {
+            transform: translateX(200px) scale(1.1);
+            box-shadow: 0 12px 35px rgba(158, 158, 158, 0.5);
+        }
+
+        .floating-add-btn:active {
+            transform: translateX(200px) scale(0.95);
+        }
+
+        @media (max-width: 480px) {
+            .floating-add-btn {
+                transform: translateX(160px);
+            }
+            
+            .floating-add-btn:hover {
+                transform: translateX(160px) scale(1.1);
+            }
+
+            .floating-add-btn:active {
+                transform: translateX(160px) scale(0.95);
+            }
+
+            .stats {
+                gap: 40px;
+            }
+
+            .stat-number {
+                font-size: 4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container" id="appContainer">
+        <!-- Header Section -->
+        <div class="header-section" id="headerSection">
+            <div class="header-content">
+                <!-- Kid indicators -->
+                <div class="kid-indicators" id="kidIndicators">
+                    <!-- Dots will be generated dynamically -->
+                </div>
+
+                <div class="header-controls">
+                    <button class="toggle-btn active" id="toggleMode">Mode</button>
+                    <button class="toggle-btn" id="toggleTest">Test</button>
+                </div>
+                
+                <!-- Initial expanded content -->
+                <div class="initial-content" id="initialContent">
+                    <div class="kid-photo" id="kidPhoto"></div>
+                    <div class="kid-name" id="kidName">Emma</div>
+                    <div class="kid-age" id="kidAge">8 years old</div>
+                    
+                    <div class="stats">
+                        <div class="stat-item">
+                            <div class="stat-number" id="memoryCount">0</div>
+                            <div class="stat-label">memories this<br>year</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="daysToBirthday">133</div>
+                            <div class="stat-label">days to<br>birthday</div>
+                        </div>
+                    </div>
+                    
+                    <div class="scroll-hint">Scroll</div>
+                </div>
+
+                <!-- Compact shrunk content -->
+                <div class="compact-content" id="compactContent">
+                    <div class="compact-photo" id="compactPhoto"></div>
+                    <div class="compact-text">
+                        <span class="stat-number" id="compactMemoryCount">0</span>
+                        <span class="stat-label" id="compactKidInfo">memories • Emma, 8 years old</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Section -->
+        <div class="content-section" id="contentSection">
+            <div class="timeline-container">
+                <div class="timeline-header">
+                    <div class="timeline-title" id="timelineTitle">Emma's Timeline</div>
+                    <div class="timeline-subtitle">Recent memories and moments</div>
+                </div>
+                
+                <div class="timeline-content">
+                    <div style="text-align: center; margin-bottom: 2rem;">
+                        <h3 style="color: #374151; margin-bottom: 1rem;">🎉 Header Works!</h3>
+                        <p style="color: #6b7280;" id="contentMessage">You can now see content after the header shrunk properly.</p>
+                    </div>
+                    
+                    <div class="demo-card">
+                        <h3>📱 Original Structure Preserved</h3>
+                        <p>Using the exact original app structure with dynamic kid data switching. The header shrinking behavior is identical to the working Emma app.</p>
+                    </div>
+                    
+                    <div class="demo-card">
+                        <h3 id="currentKidCard">🎨 Current Kid: Emma</h3>
+                        <p id="currentKidDescription">Emma is 8 years old with 12 memories and some days until birthday.</p>
+                    </div>
+                    
+                    <div class="demo-card">
+                        <h3>🔄 Swipe to Switch</h3>
+                        <p>Swipe left/right or click the dots to switch between kids. The data updates while preserving the exact scroll behavior.</p>
+                    </div>
+
+                    <div style="margin-top: 3rem;">
+                        <h3 style="color: #374151; margin-bottom: 1rem; text-align: center;" id="timelineContentTitle">Timeline Content</h3>
+                        
+                        <div style="margin: 2rem 0; padding: 1rem; background: #f3f4f6; border-radius: 8px;">
+                            <h4 style="color: #374151;" id="memory1Title">Memory 1</h4>
+                            <p style="color: #6b7280;" id="memory1Text">A special moment that shows the timeline content works properly.</p>
+                        </div>
+                        <div style="margin: 2rem 0; padding: 1rem; background: #f3f4f6; border-radius: 8px;">
+                            <h4 style="color: #374151;" id="memory2Title">Memory 2</h4>
+                            <p style="color: #6b7280;" id="memory2Text">Another memorable moment that demonstrates scrollable content.</p>
+                        </div>
+                        <div style="margin: 2rem 0; padding: 1rem; background: #f3f4f6; border-radius: 8px;">
+                            <h4 style="color: #374151;" id="memory3Title">Memory 3</h4>
+                            <p style="color: #6b7280;" id="memory3Text">Content continues to scroll naturally within the timeline container.</p>
+                        </div>
+                        
+                        <div style="height: 50vh; display: flex; align-items: center; justify-content: center; background: #f9fafb; border-radius: 12px; margin: 2rem 0;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 2rem; margin-bottom: 1rem;">👶</div>
+                                <h3 style="color: #374151; margin-bottom: 0.5rem;" id="endMessage">End of Timeline</h3>
+                                <p style="color: #6b7280;">Swipe to explore other kids!</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transition overlay to prevent white flash -->
+    <div class="transition-overlay" id="transitionOverlay"></div>
+
+    <!-- Swipe indicator -->
+    <div class="swipe-indicator" id="swipeIndicator">Swipe detected!</div>
+
+    <!-- Floating Add Button -->
+    <button class="floating-add-btn" id="addBtn">+</button>
+
+    <!-- EXACT ORIGINAL - Scroll content area (transparent, no content) -->
+    <div class="scroll-extender"></div>
+
+    <script>
+        // Global variables
+        let currentKidIndex = 0;
+        let isTransitioning = false;
+
+        // Sample kids data
+        const kids = [
+            {
+                name: 'Emma',
+                age: 8,
+                birthday: '2016-10-17',
+                color: '#B8BCC4',
+                photoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23E8E8E8"/><circle cx="70" cy="55" r="20" fill="%23B8BCC4" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%23B8BCC4" opacity="0.7"/></svg>',
+                compactPhotoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="%23E8E8E8"/><circle cx="16" cy="12" r="4" fill="%23B8BCC4" opacity="0.7"/><ellipse cx="16" cy="22" rx="6" ry="4" fill="%23B8BCC4" opacity="0.7"/></svg>',
+                memories: 12
+            },
+            {
+                name: 'Alex',
+                age: 5,
+                birthday: '2019-03-15',
+                color: '#A8D5BA',
+                photoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23D4F4E1"/><circle cx="70" cy="55" r="20" fill="%23A8D5BA" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%23A8D5BA" opacity="0.7"/></svg>',
+                compactPhotoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="%23D4F4E1"/><circle cx="16" cy="12" r="4" fill="%23A8D5BA" opacity="0.7"/><ellipse cx="16" cy="22" rx="6" ry="4" fill="%23A8D5BA" opacity="0.7"/></svg>',
+                memories: 8
+            },
+            {
+                name: 'Sophie',
+                age: 12,
+                birthday: '2012-08-22',
+                color: '#F4A4A4',
+                photoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23FDE8E8"/><circle cx="70" cy="55" r="20" fill="%23F4A4A4" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%23F4A4A4" opacity="0.7"/></svg>',
+                compactPhotoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="%23FDE8E8"/><circle cx="16" cy="12" r="4" fill="%23F4A4A4" opacity="0.7"/><ellipse cx="16" cy="22" rx="6" ry="4" fill="%23F4A4A4" opacity="0.7"/></svg>',
+                memories: 24
+            },
+            {
+                name: 'Max',
+                age: 3,
+                birthday: '2021-12-05',
+                color: '#9BB5E8',
+                photoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23E8F0FE"/><circle cx="70" cy="55" r="20" fill="%239BB5E8" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%239BB5E8" opacity="0.7"/></svg>',
+                compactPhotoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="%23E8F0FE"/><circle cx="16" cy="12" r="4" fill="%239BB5E8" opacity="0.7"/><ellipse cx="16" cy="22" rx="6" ry="4" fill="%239BB5E8" opacity="0.7"/></svg>',
+                memories: 5
+            }
+        ];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeApp();
+            setupScrollHandling();
+            setupTouchHandling();
+            setupUIHandlers();
+        });
+
+        function initializeApp() {
+            updateKidIndicators();
+            updateCurrentKidData();
+        }
+
+        function updateKidIndicators() {
+            const indicators = document.getElementById('kidIndicators');
+            indicators.innerHTML = '';
+            
+            kids.forEach((kid, index) => {
+                const dot = document.createElement('div');
+                dot.className = `kid-dot ${index === currentKidIndex ? 'active' : ''}`;
+                dot.dataset.index = index;
+                dot.title = kid.name;
+                indicators.appendChild(dot);
+            });
+        }
+
+        function updateCurrentKidData() {
+            const currentKid = kids[currentKidIndex];
+            const daysToBirthday = calculateDaysToBirthday(currentKid.birthday);
+            
+            // Update header data and body background
+            document.documentElement.style.setProperty('--bg-primary', currentKid.color);
+            document.getElementById('headerSection').style.background = currentKid.color;
+            
+            document.getElementById('kidPhoto').style.backgroundImage = `url('${currentKid.photoUrl}')`;
+            document.getElementById('compactPhoto').style.backgroundImage = `url('${currentKid.compactPhotoUrl}')`;
+            
+            document.getElementById('kidName').textContent = currentKid.name;
+            document.getElementById('kidAge').textContent = `${currentKid.age} years old`;
+            document.getElementById('memoryCount').textContent = currentKid.memories;
+            document.getElementById('daysToBirthday').textContent = daysToBirthday;
+            
+            document.getElementById('compactMemoryCount').textContent = currentKid.memories;
+            document.getElementById('compactKidInfo').textContent = `memories • ${currentKid.name}, ${currentKid.age} years old`;
+            
+            // Update content data  
+            document.getElementById('timelineTitle').textContent = `${currentKid.name}'s Timeline`;
+            document.getElementById('contentMessage').textContent = `You can now see ${currentKid.name}'s content after the header shrunk properly.`;
+            document.getElementById('currentKidCard').textContent = `🎨 Current Kid: ${currentKid.name}`;
+            document.getElementById('currentKidDescription').textContent = `${currentKid.name} is ${currentKid.age} years old with ${currentKid.memories} memories and ${daysToBirthday} days until birthday.`;
+            document.getElementById('timelineContentTitle').textContent = `${currentKid.name}'s Content`;
+            document.getElementById('memory1Title').textContent = `${currentKid.name}'s Memory 1`;
+            document.getElementById('memory1Text').textContent = `A special moment with ${currentKid.name} that shows the timeline content works properly.`;
+            document.getElementById('memory2Title').textContent = `${currentKid.name}'s Memory 2`;
+            document.getElementById('memory2Text').textContent = `Another memorable moment with ${currentKid.name}.`;
+            document.getElementById('memory3Title').textContent = `${currentKid.name}'s Memory 3`;
+            document.getElementById('memory3Text').textContent = `More content for ${currentKid.name} that continues to scroll naturally.`;
+            document.getElementById('endMessage').textContent = `End of ${currentKid.name}'s Timeline`;
+        }
+
+        function calculateDaysToBirthday(birthday) {
+            const today = new Date();
+            const birthDate = new Date(birthday);
+            
+            birthDate.setFullYear(today.getFullYear());
+            
+            if (birthDate < today) {
+                birthDate.setFullYear(today.getFullYear() + 1);
+            }
+            
+            return Math.ceil((birthDate - today) / (1000 * 60 * 60 * 24));
+        }
+
+        async function switchToKid(direction, directIndex = null) {
+            if (isTransitioning || kids.length <= 1) return;
+            
+            isTransitioning = true;
+            const appContainer = document.getElementById('appContainer');
+            const transitionOverlay = document.getElementById('transitionOverlay');
+            
+            try {
+                // Calculate new index
+                let newIndex = directIndex !== null ? directIndex : currentKidIndex + direction;
+                
+                // Handle wrapping
+                if (newIndex >= kids.length) newIndex = 0;
+                if (newIndex < 0) newIndex = kids.length - 1;
+                
+                if (newIndex === currentKidIndex) {
+                    isTransitioning = false;
+                    return;
+                }
+                
+                // Determine slide direction
+                let slideDirection;
+                if (directIndex !== null) {
+                    slideDirection = directIndex > currentKidIndex ? 1 : -1;
+                } else {
+                    slideDirection = direction;
+                }
+                
+                // Pre-update body background to target kid's color
+                document.documentElement.style.setProperty('--bg-primary', kids[newIndex].color);
+                
+                // Show transition overlay with current kid's color
+                transitionOverlay.style.background = kids[currentKidIndex].color;
+                transitionOverlay.classList.add('active');
+                
+                // Phase 1: Slide out
+                const slideOutClass = slideDirection > 0 ? 'sliding-left' : 'sliding-right';
+                appContainer.classList.add(slideOutClass);
+                
+                setTimeout(() => {
+                    // Update data while off-screen and overlay is covering
+                    currentKidIndex = newIndex;
+                    updateKidIndicators();
+                    updateCurrentKidData();
+                    
+                    // Reset scroll position - each kid starts fresh with full header
+                    window.scrollTo(0, 0);
+                    
+                    // Update overlay to new kid's color
+                    transitionOverlay.style.background = kids[currentKidIndex].color;
+                    
+                    // Phase 2: Slide in from opposite direction
+                    appContainer.classList.remove(slideOutClass);
+                    const slideInClass = slideDirection > 0 ? 'sliding-in-left' : 'sliding-in-right';
+                    appContainer.classList.add(slideInClass);
+                    
+                    setTimeout(() => {
+                        // Complete animation and hide overlay
+                        appContainer.classList.remove(slideInClass);
+                        transitionOverlay.classList.remove('active');
+                        isTransitioning = false;
+                    }, 300);
+                }, 150);
+                
+            } catch (error) {
+                console.error('Error switching kid:', error);
+                appContainer.classList.remove('sliding-left', 'sliding-right', 'sliding-in-left', 'sliding-in-right');
+                transitionOverlay.classList.remove('active');
+                isTransitioning = false;
+            }
+        }
+
+        function setupScrollHandling() {
+            const headerSection = document.getElementById('headerSection');
+            const contentSection = document.getElementById('contentSection');
+            const initialContent = document.getElementById('initialContent');
+            const compactContent = document.getElementById('compactContent');
+
+            const rootStyles = getComputedStyle(document.documentElement);
+            const INITIAL_HEADER_VH = parseFloat(rootStyles.getPropertyValue('--initial-header-vh').trim());
+            const MIN_HEADER_PX = parseFloat(rootStyles.getPropertyValue('--min-header-px').trim());
+            const SCROLL_DISTANCE_FOR_FULL_EFFECT = parseFloat(rootStyles.getPropertyValue('--scroll-distance-for-full-effect').trim());
+
+            function updateHeights() {
+                const scrollY = window.scrollY;
+                const viewportHeight = window.innerHeight;
+
+                const initialHeaderPx = viewportHeight * (INITIAL_HEADER_VH / 100);
+                const minHeaderPx = MIN_HEADER_PX;
+                const totalShrinkableHeightPx = initialHeaderPx - minHeaderPx;
+                
+                let shrinkProgress = 0;
+                if (SCROLL_DISTANCE_FOR_FULL_EFFECT > 0) {
+                    shrinkProgress = Math.min(scrollY / SCROLL_DISTANCE_FOR_FULL_EFFECT, 1);
+                } else if (scrollY > 0) {
+                    shrinkProgress = 1;
+                }
+                
+                // Only modify heights when scrolling
+                if (scrollY > 0) {
+                    const currentShrinkAmountPx = totalShrinkableHeightPx * shrinkProgress;
+                    let currentHeaderPx = initialHeaderPx - currentShrinkAmountPx;
+                    currentHeaderPx = Math.max(minHeaderPx, Math.min(currentHeaderPx, initialHeaderPx));
+
+                    headerSection.style.height = `${currentHeaderPx}px`;
+                    
+                    let contentHeight = viewportHeight - currentHeaderPx;
+                    if (contentHeight < 0) contentHeight = 0;
+                    
+                    contentSection.style.height = `${contentHeight}px`;
+                    contentSection.style.maxHeight = `${contentHeight}px`;
+                    contentSection.style.overflow = 'auto';
+                } else {
+                    headerSection.style.height = '';
+                    contentSection.style.height = '';
+                    contentSection.style.maxHeight = '';
+                    contentSection.style.overflow = '';
+                }
+
+                // Initial Content - fade out and scale down
+                if (shrinkProgress < 1) {
+                    initialContent.style.display = 'block';
+                    if (shrinkProgress > 0) {
+                        initialContent.style.transform = `translateY(${-shrinkProgress * 50}px) scale(${1 - shrinkProgress * 0.3})`;
+                        initialContent.style.opacity = 1 - shrinkProgress;
+                    } else {
+                        initialContent.style.transform = '';
+                        initialContent.style.opacity = '';
+                    }
+                } else {
+                    initialContent.style.display = 'none';
+                }
+
+                // Compact Content - scale in
+                if (shrinkProgress > 0) {
+                    compactContent.style.display = 'flex';
+                    compactContent.style.transform = `scale(${shrinkProgress})`;
+                    compactContent.style.opacity = shrinkProgress;
+                    compactContent.style.pointerEvents = shrinkProgress === 1 ? 'auto' : 'none';
+                } else {
+                    compactContent.style.display = 'none';
+                }
+            }
+
+            window.addEventListener('scroll', updateHeights);
+            window.addEventListener('resize', updateHeights);
+
+            if (window.scrollY > 10) {
+                updateHeights();
+            }
+        }
+
+        function setupTouchHandling() {
+            let touchStartY = 0;
+            let touchStartX = 0;
+            let touchStartTime = 0;
+            const swipeIndicator = document.getElementById('swipeIndicator');
+
+            function handleTouchStart(e) {
+                const touch = e.touches[0];
+                touchStartY = touch.clientY;
+                touchStartX = touch.clientX;
+                touchStartTime = Date.now();
+            }
+
+            async function handleTouchEnd(e) {
+                if (!e.changedTouches[0] || isTransitioning) return;
+
+                const touch = e.changedTouches[0];
+                const deltaY = touch.clientY - touchStartY;
+                const deltaX = touch.clientX - touchStartX;
+                const deltaTime = Date.now() - touchStartTime;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const velocity = distance / deltaTime;
+
+                // Only handle clear horizontal swipes for kid switching
+                if (distance > 60 && deltaTime < 300 && velocity > 0.4) {
+                    const angle = Math.atan2(Math.abs(deltaY), Math.abs(deltaX)) * 180 / Math.PI;
+                    
+                    // Only intercept clearly horizontal swipes (angle < 30 degrees)
+                    if (angle < 30) {
+                        const swipeDirection = deltaX > 0 ? 'right' : 'left';
+
+                        swipeIndicator.textContent = `${swipeDirection === 'left' ? '→' : '←'} ${swipeDirection}`;
+                        swipeIndicator.classList.add('show');
+                        
+                        setTimeout(() => {
+                            swipeIndicator.classList.remove('show');
+                        }, 1500);
+
+                        if (swipeDirection === 'left') {
+                            await switchToKid(1);
+                        } else if (swipeDirection === 'right') {
+                            await switchToKid(-1);
+                        }
+                    }
+                }
+            }
+
+            document.addEventListener('touchstart', handleTouchStart, { passive: true });
+            document.addEventListener('touchend', handleTouchEnd, { passive: true });
+        }
+
+        function setupUIHandlers() {
+            document.getElementById('toggleMode').addEventListener('click', function() {
+                this.classList.toggle('active');
+            });
+
+            document.getElementById('toggleTest').addEventListener('click', function() {
+                this.classList.toggle('active');
+                const currentKid = kids[currentKidIndex];
+                alert(`Test: ${currentKid.name} is ${currentKid.age} years old with ${currentKid.memories} memories!`);
+            });
+
+            document.getElementById('kidIndicators').addEventListener('click', async (e) => {
+                if (e.target.classList.contains('kid-dot')) {
+                    const index = parseInt(e.target.dataset.index);
+                    if (index !== currentKidIndex) {
+                        await switchToKid(0, index);
+                    }
+                }
+            });
+
+            // Floating Add Button
+            document.getElementById('addBtn').addEventListener('click', () => {
+                const currentKid = kids[currentKidIndex];
+                alert(`Add new memory for ${currentKid.name}!`);
+            });
+        }
+    </script>
+</body>
+</html>

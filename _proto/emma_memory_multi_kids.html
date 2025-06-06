@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family Memory Timeline</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #B8BCC4;
+            --bg-secondary: #E8E8E8;
+            --text-primary: #FFFFFF;
+            --text-secondary: #666666;
+            
+            /* Dynamic height controls */
+            --initial-header-vh: 100;
+            --min-header-px: 80;
+            --scroll-distance-for-full-effect: 500;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            color: #333;
+            overflow-x: hidden;
+        }
+
+        /* Viewport container - fixed size, prevents overflow */
+        .viewport {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Horizontal container for all kids */
+        .kids-container {
+            display: flex;
+            width: 400vw; /* 4 kids * 100vw each */
+            height: 100vh;
+            transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+            will-change: transform;
+        }
+
+        /* Individual kid view */
+        .kid-view {
+            width: 100vw;
+            height: 100vh;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        /* Main container - now contained within kid-view */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            left: 0;
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            overflow: hidden;
+        }
+
+        /* Header Section - Shrinks */
+        .header-section {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            min-height: 80px;
+            overflow: hidden;
+            transition: height 0.05s linear, background 0.3s ease;
+            will-change: height;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .header-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px 40px 20px;
+            position: relative;
+            width: 100%;
+        }
+
+        /* Kid indicators */
+        .kid-indicators {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            display: flex;
+            gap: 6px;
+            z-index: 10;
+        }
+
+        .kid-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.4);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .kid-dot.active {
+            background: white;
+            transform: scale(1.4);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        /* Initial content (visible when expanded) */
+        .initial-content {
+            display: block;
+            text-align: center;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .kid-photo {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .kid-name {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .kid-age {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 40px;
+            transition: all 0.3s ease;
+        }
+
+        .stats {
+            display: flex;
+            gap: 60px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 5rem;
+            font-weight: 200;
+            line-height: 0.8;
+            margin-bottom: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            opacity: 0.9;
+            line-height: 1.4;
+        }
+
+        .scroll-hint {
+            margin-top: 40px;
+            opacity: 0.8;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .scroll-hint::after {
+            content: '↓';
+            display: block;
+            text-align: center;
+            margin-top: 8px;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-8px); }
+            60% { transform: translateY(-4px); }
+        }
+
+        /* Compact content (visible when shrunk) */
+        .compact-content {
+            display: none;
+            align-items: center;
+            width: calc(100% - 3rem);
+            position: absolute;
+            top: 50%;
+            left: 1.5rem;
+            transform: translateY(-50%);
+            pointer-events: none;
+            transform-origin: left center;
+        }
+
+        .compact-photo {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            margin-right: 12px;
+            transition: all 0.3s ease;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .compact-text {
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .compact-text .stat-number {
+            display: inline;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-right: 0.25rem;
+        }
+
+        .compact-text .stat-label {
+            display: inline;
+            font-size: 0.9rem;
+        }
+
+        /* Content Section - Takes remaining space */
+        .content-section {
+            background: var(--bg-secondary);
+            padding: 0;
+            height: 0;
+            max-height: 0;
+            overflow: hidden;
+            transition: height 0.05s linear, max-height 0.05s linear;
+            will-change: height;
+            flex-shrink: 0;
+        }
+
+        .timeline-container {
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: var(--bg-secondary);
+        }
+
+        .timeline-header {
+            text-align: center;
+            padding: 20px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+
+        .timeline-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 4px;
+        }
+
+        .timeline-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .timeline {
+            position: relative;
+        }
+
+        /* Date Section Headers - Sticky */
+        .date-section {
+            position: relative;
+        }
+
+        .date-header {
+            position: sticky;
+            top: 81px;
+            z-index: 15;
+            background: var(--bg-secondary);
+            padding: 12px 20px;
+            border-bottom: 1px solid #e5e7eb;
+            font-weight: 600;
+            color: #374151;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .date-memories {
+            background: white;
+        }
+
+        /* Timeline items */
+        .timeline-item {
+            position: relative;
+            padding: 16px 20px;
+            border-bottom: 1px solid #f3f4f6;
+            background: white;
+            transition: background-color 0.2s ease;
+        }
+
+        .timeline-item:hover {
+            background: #f9fafb;
+        }
+
+        .timeline-item:last-child {
+            border-bottom: none;
+        }
+
+        .item-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .item-type {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .item-icon {
+            width: 16px;
+            height: 16px;
+            display: inline-block;
+            opacity: 0.7;
+        }
+
+        .item-time {
+            font-size: 0.75rem;
+            color: #9ca3af;
+        }
+
+        .item-content {
+            color: #374151;
+            line-height: 1.5;
+        }
+
+        .message-text {
+            font-size: 0.95rem;
+        }
+
+        /* Scrollbar styling */
+        .timeline-container::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .timeline-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .timeline-container::-webkit-scrollbar-thumb {
+            background: #9E9E9E;
+            border-radius: 2px;
+        }
+
+        .timeline-container::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+
+        /* Scroll extender to provide scroll distance */
+        .scroll-extender {
+            height: 200vh;
+            background: linear-gradient(to bottom, #e5e7eb, #f3f4f6);
+            padding: 2rem;
+            text-align: center;
+            color: #6b7280;
+        }
+
+        .scroll-extender h3 {
+            color: #374151;
+            margin-bottom: 1rem;
+        }
+
+        .scroll-extender p {
+            margin-bottom: 0.5rem;
+            opacity: 0.8;
+        }
+
+        /* Swipe indicator */
+        .swipe-indicator {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(158, 158, 158, 0.9);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 1001;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .swipe-indicator.show {
+            opacity: 1;
+        }
+
+        @media (max-width: 480px) {
+            .stats {
+                gap: 40px;
+            }
+
+            .stat-number {
+                font-size: 4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="viewport">
+        <div class="kids-container" id="kidsContainer">
+            <!-- Kid views will be generated dynamically -->
+        </div>
+    </div>
+
+    <!-- Swipe indicator -->
+    <div class="swipe-indicator" id="swipeIndicator">Swipe detected!</div>
+
+    <!-- Scroll content area -->
+    <div class="scroll-extender">
+        <div style="padding: 2rem; text-align: center; color: #9ca3af;">
+            <div style="height: 100vh; display: flex; align-items: center; justify-content: center;">
+                <div style="text-align: center; opacity: 0.5;">
+                    <div style="font-size: 2rem; margin-bottom: 1rem;">👨‍👩‍👧‍👦</div>
+                    <p>Swipe left/right to switch between kids</p>
+                    <p style="font-size: 0.8rem; margin-top: 0.5rem;">Scroll down to see timeline</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sample kids data with simple memories
+        const kids = [
+            {
+                name: 'Emma',
+                age: 8,
+                birthday: '2016-10-17',
+                color: '#B8BCC4',
+                photoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23E8E8E8"/><circle cx="70" cy="55" r="20" fill="%23B8BCC4" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%23B8BCC4" opacity="0.7"/></svg>',
+                memories: [
+                    { type: 'message', text: 'Emma learned to ride a bike today! 🚲', date: '2024-12-01', time: '14:30' },
+                    { type: 'message', text: 'Made cookies together - Emma was the best helper!', date: '2024-11-30', time: '16:15' },
+                    { type: 'message', text: 'Emma got an A on her math test!', date: '2024-11-28', time: '15:45' },
+                    { type: 'message', text: 'First day of swimming lessons', date: '2024-11-25', time: '10:00' }
+                ]
+            },
+            {
+                name: 'Alex',
+                age: 5,
+                birthday: '2019-03-15',
+                color: '#A8D5BA',
+                photoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23D4F4E1"/><circle cx="70" cy="55" r="20" fill="%23A8D5BA" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%23A8D5BA" opacity="0.7"/></svg>',
+                memories: [
+                    { type: 'message', text: 'Alex built an amazing tower with blocks!', date: '2024-12-02', time: '11:20' },
+                    { type: 'message', text: 'Found a butterfly in the garden', date: '2024-12-01', time: '09:15' },
+                    { type: 'message', text: 'Alex helped me make pancakes for breakfast', date: '2024-11-29', time: '08:30' }
+                ]
+            },
+            {
+                name: 'Sophie',
+                age: 12,
+                birthday: '2012-08-22',
+                color: '#F4A4A4',
+                photoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23FDE8E8"/><circle cx="70" cy="55" r="20" fill="%23F4A4A4" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%23F4A4A4" opacity="0.7"/></svg>',
+                memories: [
+                    { type: 'message', text: 'Sophie won the school art competition! 🎨', date: '2024-12-03', time: '16:00' },
+                    { type: 'message', text: 'Started reading Harry Potter series', date: '2024-11-30', time: '19:30' },
+                    { type: 'message', text: 'Sophie played piano at the school concert', date: '2024-11-27', time: '18:45' }
+                ]
+            },
+            {
+                name: 'Max',
+                age: 3,
+                birthday: '2021-12-05',
+                color: '#9BB5E8',
+                photoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23E8F0FE"/><circle cx="70" cy="55" r="20" fill="%239BB5E8" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%239BB5E8" opacity="0.7"/></svg>',
+                memories: [
+                    { type: 'message', text: 'Max said his first full sentence! 🗣️', date: '2024-12-02', time: '12:45' },
+                    { type: 'message', text: 'Playing with toy cars in the sandbox', date: '2024-12-01', time: '10:30' },
+                    { type: 'message', text: 'Max loves splashing in the bath!', date: '2024-11-30', time: '19:00' }
+                ]
+            }
+        ];
+
+        // Global variables
+        let currentKidIndex = 0;
+        let isTransitioning = false;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            createKidViews();
+            setupScrollHandling();
+            setupTouchHandling();
+            setupUIHandlers();
+        });
+
+        function createKidViews() {
+            const kidsContainer = document.getElementById('kidsContainer');
+            kidsContainer.innerHTML = '';
+
+            // Adjust container width based on number of kids
+            kidsContainer.style.width = `${kids.length * 100}vw`;
+
+            kids.forEach((kid, index) => {
+                const kidView = createKidViewElement(kid, index);
+                kidsContainer.appendChild(kidView);
+            });
+
+            // Set initial position to current kid
+            updateKidsContainerPosition();
+        }
+
+        function createKidViewElement(kid, index) {
+            const kidView = document.createElement('div');
+            kidView.className = 'kid-view';
+            kidView.dataset.kidIndex = index;
+
+            kidView.innerHTML = `
+                <div class="app-container">
+                    <!-- Header Section -->
+                    <div class="header-section" style="background: ${kid.color};">
+                        <div class="header-content">
+                            <!-- Kid indicators -->
+                            <div class="kid-indicators" id="kidIndicators-${index}">
+                                ${kids.map((k, i) => `
+                                    <div class="kid-dot ${i === index ? 'active' : ''}" data-index="${i}" title="${k.name}"></div>
+                                `).join('')}
+                            </div>
+                            
+                            <!-- Initial expanded content -->
+                            <div class="initial-content" id="initialContent-${index}">
+                                <div class="kid-photo" style="background-image: url('${kid.photoUrl}');"></div>
+                                <div class="kid-name">${kid.name}</div>
+                                <div class="kid-age">${kid.age} years old</div>
+                                
+                                <div class="stats">
+                                    <div class="stat-item">
+                                        <div class="stat-number">${kid.memories.length}</div>
+                                        <div class="stat-label">memories this<br>month</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-number">${calculateDaysToBirthday(kid.birthday)}</div>
+                                        <div class="stat-label">days to<br>birthday</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="scroll-hint">Scroll</div>
+                            </div>
+
+                            <!-- Compact shrunk content -->
+                            <div class="compact-content" id="compactContent-${index}">
+                                <div class="compact-photo" style="background-image: url('${kid.photoUrl}');"></div>
+                                <div class="compact-text">
+                                    <span class="stat-number">${kid.memories.length}</span>
+                                    <span class="stat-label">memories • ${kid.name}, ${kid.age} years old</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Content Section -->
+                    <div class="content-section" id="contentSection-${index}">
+                        <div class="timeline-container">
+                            <div class="timeline-header">
+                                <div class="timeline-title">${kid.name}'s Timeline</div>
+                                <div class="timeline-subtitle">Recent memories and moments</div>
+                            </div>
+                            
+                            <div class="timeline" id="timeline-${index}">
+                                ${generateTimelineHTML(kid.memories)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            return kidView;
+        }
+
+        function generateTimelineHTML(memories) {
+            if (!memories || memories.length === 0) {
+                return `
+                    <div style="text-align: center; padding: 3rem; color: #6b7280;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📝</div>
+                        <h3 style="color: #374151; margin-bottom: 1rem;">No memories yet</h3>
+                        <p>Start adding some wonderful moments!</p>
+                    </div>
+                `;
+            }
+
+            // Group memories by date
+            const groupedMemories = groupMemoriesByDate(memories);
+            let html = '';
+
+            for (const [dateStr, dayMemories] of Object.entries(groupedMemories)) {
+                html += `
+                    <div class="date-section">
+                        <div class="date-header">${formatDateHeader(dateStr)}</div>
+                        <div class="date-memories">
+                            ${dayMemories.map(memory => createMemoryHTML(memory)).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            return html;
+        }
+
+        function createMemoryHTML(memory) {
+            return `
+                <div class="timeline-item ${memory.type}">
+                    <div class="item-header">
+                        <div class="item-type ${memory.type}">
+                            <span class="item-icon">💬</span>
+                            Message
+                        </div>
+                        <div class="item-time">${memory.time}</div>
+                    </div>
+                    <div class="item-content">
+                        <div class="message-text">${memory.text}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function groupMemoriesByDate(memories) {
+            const groups = {};
+            
+            memories.forEach(memory => {
+                const dateStr = memory.date;
+                if (!groups[dateStr]) {
+                    groups[dateStr] = [];
+                }
+                groups[dateStr].push(memory);
+            });
+
+            return groups;
+        }
+
+        function formatDateHeader(dateStr) {
+            const date = new Date(dateStr);
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            const todayStr = today.toISOString().split('T')[0];
+            const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+            if (dateStr === todayStr) {
+                return 'Today';
+            } else if (dateStr === yesterdayStr) {
+                return 'Yesterday';
+            } else {
+                return date.toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                });
+            }
+        }
+
+        function calculateDaysToBirthday(birthday) {
+            const today = new Date();
+            const birthDate = new Date(birthday);
+            
+            // Set birthday to this year
+            birthDate.setFullYear(today.getFullYear());
+            
+            // If birthday has passed this year, set to next year
+            if (birthDate < today) {
+                birthDate.setFullYear(today.getFullYear() + 1);
+            }
+            
+            return Math.ceil((birthDate - today) / (1000 * 60 * 60 * 24));
+        }
+
+        function updateKidsContainerPosition() {
+            const kidsContainer = document.getElementById('kidsContainer');
+            const translateX = -currentKidIndex * 100;
+            kidsContainer.style.transform = `translateX(${translateX}vw)`;
+        }
+
+        async function switchToKid(direction, directIndex = null) {
+            if (isTransitioning || kids.length <= 1) return;
+            
+            isTransitioning = true;
+            
+            try {
+                // Calculate new index
+                let newIndex = directIndex !== null ? directIndex : currentKidIndex + direction;
+                
+                // Handle wrapping
+                if (newIndex >= kids.length) newIndex = 0;
+                if (newIndex < 0) newIndex = kids.length - 1;
+                
+                if (newIndex === currentKidIndex) {
+                    isTransitioning = false;
+                    return;
+                }
+                
+                // Update current kid
+                currentKidIndex = newIndex;
+                
+                // Animate to new position
+                updateKidsContainerPosition();
+                
+                // Update UI
+                updateAllKidIndicators();
+                
+                // Complete transition
+                setTimeout(() => {
+                    isTransitioning = false;
+                }, 400); // Match CSS transition duration
+                
+            } catch (error) {
+                console.error('Error switching kid:', error);
+                isTransitioning = false;
+            }
+        }
+
+        function updateAllKidIndicators() {
+            // Update all kid indicator sets
+            kids.forEach((_, kidIndex) => {
+                const indicators = document.getElementById(`kidIndicators-${kidIndex}`);
+                if (indicators) {
+                    const dots = indicators.querySelectorAll('.kid-dot');
+                    dots.forEach((dot, dotIndex) => {
+                        dot.classList.toggle('active', dotIndex === currentKidIndex);
+                    });
+                }
+            });
+        }
+
+        function setupScrollHandling() {
+            function updateHeights() {
+                // Get elements for the current kid
+                const currentKidView = document.querySelector(`[data-kid-index="${currentKidIndex}"]`);
+                if (!currentKidView) return;
+
+                const headerSection = currentKidView.querySelector('.header-section');
+                const contentSection = currentKidView.querySelector('.content-section');
+                const initialContent = currentKidView.querySelector('.initial-content');
+                const compactContent = currentKidView.querySelector('.compact-content');
+                
+                const scrollY = window.scrollY;
+                const viewportHeight = window.innerHeight;
+                const INITIAL_HEADER_VH = 100;
+                const MIN_HEADER_PX = 80;
+                const SCROLL_DISTANCE_FOR_FULL_EFFECT = 500;
+
+                const initialHeaderPx = viewportHeight * (INITIAL_HEADER_VH / 100);
+                const minHeaderPx = MIN_HEADER_PX;
+                const totalShrinkableHeightPx = initialHeaderPx - minHeaderPx;
+                
+                let shrinkProgress = 0;
+                if (SCROLL_DISTANCE_FOR_FULL_EFFECT > 0) {
+                    shrinkProgress = Math.min(scrollY / SCROLL_DISTANCE_FOR_FULL_EFFECT, 1);
+                } else if (scrollY > 0) {
+                    shrinkProgress = 1;
+                }
+                
+                if (scrollY > 0) {
+                    const currentShrinkAmountPx = totalShrinkableHeightPx * shrinkProgress;
+                    let currentHeaderPx = initialHeaderPx - currentShrinkAmountPx;
+                    currentHeaderPx = Math.max(minHeaderPx, Math.min(currentHeaderPx, initialHeaderPx));
+
+                    headerSection.style.height = `${currentHeaderPx}px`;
+                    
+                    let contentHeight = viewportHeight - currentHeaderPx;
+                    if (contentHeight < 0) contentHeight = 0;
+                    
+                    contentSection.style.height = `${contentHeight}px`;
+                    contentSection.style.maxHeight = `${contentHeight}px`;
+                    contentSection.style.overflow = 'auto';
+                } else {
+                    headerSection.style.height = '';
+                    contentSection.style.height = '';
+                    contentSection.style.maxHeight = '';
+                    contentSection.style.overflow = '';
+                }
+
+                // Initial Content - fade out and scale down
+                if (shrinkProgress < 1) {
+                    initialContent.style.display = 'block';
+                    if (shrinkProgress > 0) {
+                        initialContent.style.transform = `translateY(${-shrinkProgress * 50}px) scale(${1 - shrinkProgress * 0.3})`;
+                        initialContent.style.opacity = 1 - shrinkProgress;
+                    } else {
+                        initialContent.style.transform = '';
+                        initialContent.style.opacity = '';
+                    }
+                } else {
+                    initialContent.style.display = 'none';
+                }
+
+                // Compact Content - scale in
+                if (shrinkProgress > 0) {
+                    compactContent.style.display = 'flex';
+                    compactContent.style.transform = `scale(${shrinkProgress})`;
+                    compactContent.style.opacity = shrinkProgress;
+                    compactContent.style.pointerEvents = shrinkProgress === 1 ? 'auto' : 'none';
+                } else {
+                    compactContent.style.display = 'none';
+                }
+            }
+
+            // Event listeners
+            window.addEventListener('scroll', updateHeights);
+            window.addEventListener('resize', updateHeights);
+
+            if (window.scrollY > 10) {
+                updateHeights();
+            }
+        }
+
+        function setupTouchHandling() {
+            let touchStartY = 0;
+            let touchStartX = 0;
+            let touchStartTime = 0;
+            const swipeIndicator = document.getElementById('swipeIndicator');
+
+            function handleTouchStart(e) {
+                const touch = e.touches[0];
+                touchStartY = touch.clientY;
+                touchStartX = touch.clientX;
+                touchStartTime = Date.now();
+            }
+
+            async function handleTouchEnd(e) {
+                if (!e.changedTouches[0] || isTransitioning) return;
+
+                const touch = e.changedTouches[0];
+                const deltaY = touch.clientY - touchStartY;
+                const deltaX = touch.clientX - touchStartX;
+                const deltaTime = Date.now() - touchStartTime;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const velocity = distance / deltaTime;
+
+                // Detect swipe
+                if (distance > 50 && deltaTime < 300 && velocity > 0.3) {
+                    const angle = Math.atan2(Math.abs(deltaY), Math.abs(deltaX)) * 180 / Math.PI;
+                    
+                    let swipeDirection = '';
+                    if (angle < 45) {
+                        swipeDirection = deltaX > 0 ? 'right' : 'left';
+                    } else {
+                        swipeDirection = deltaY > 0 ? 'down' : 'up';
+                    }
+
+                    // Show swipe indicator
+                    swipeIndicator.textContent = `Swiped ${swipeDirection}!`;
+                    swipeIndicator.classList.add('show');
+                    
+                    setTimeout(() => {
+                        swipeIndicator.classList.remove('show');
+                    }, 1500);
+
+                    // Handle swipe actions
+                    await handleSwipe(swipeDirection);
+                }
+            }
+
+            async function handleSwipe(direction) {
+                const SCROLL_DISTANCE_FOR_FULL_EFFECT = 500;
+                
+                switch(direction) {
+                    case 'up':
+                        window.scrollTo({
+                            top: SCROLL_DISTANCE_FOR_FULL_EFFECT + 100,
+                            behavior: 'smooth'
+                        });
+                        break;
+                    case 'down':
+                        if (window.pageYOffset > 50) {
+                            window.scrollTo({
+                                top: 0,
+                                behavior: 'smooth'
+                            });
+                        }
+                        break;
+                    case 'left':
+                        // Next kid
+                        await switchToKid(1);
+                        break;
+                    case 'right':
+                        // Previous kid
+                        await switchToKid(-1);
+                        break;
+                }
+            }
+
+            // Touch event listeners
+            document.addEventListener('touchstart', handleTouchStart, { passive: true });
+            document.addEventListener('touchend', handleTouchEnd, { passive: true });
+        }
+
+        function setupUIHandlers() {
+            // Kid indicator clicks
+            document.addEventListener('click', async (e) => {
+                if (e.target.classList.contains('kid-dot')) {
+                    const index = parseInt(e.target.dataset.index);
+                    if (index !== currentKidIndex) {
+                        await switchToKid(0, index); // Direct switch
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

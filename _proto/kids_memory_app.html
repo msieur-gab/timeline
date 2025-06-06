@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Journal - Emma's Adventures</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+            min-height: 300vh;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        .memory-app {
+            position: relative;
+            min-height: 300vh;
+        }
+
+        /* Kid Info Header - Full Screen */
+        .kid-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 40px 20px;
+            z-index: 10;
+        }
+
+        .kid-header.collapsed {
+            height: 120px;
+            padding: 20px;
+            justify-content: flex-start;
+            align-items: flex-start;
+            text-align: left;
+        }
+
+        .kid-avatar {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            margin-bottom: 24px;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+
+        .kid-header.collapsed .kid-avatar {
+            width: 60px;
+            height: 60px;
+            font-size: 1.5rem;
+            margin-bottom: 0;
+            margin-right: 16px;
+        }
+
+        .kid-name {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .kid-header.collapsed .kid-name {
+            font-size: 1.5rem;
+            margin-bottom: 4px;
+        }
+
+        .kid-age {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 40px;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .kid-header.collapsed .kid-age {
+            font-size: 0.9rem;
+            margin-bottom: 0;
+        }
+
+        .kid-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            align-items: center;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .kid-header.collapsed .kid-stats {
+            flex-direction: row;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .stat-item {
+            text-align: center;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .kid-header.collapsed .stat-item {
+            text-align: left;
+        }
+
+        .stat-number {
+            font-size: 3rem;
+            font-weight: 800;
+            display: block;
+            line-height: 1;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .kid-header.collapsed .stat-number {
+            font-size: 1.8rem;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 500;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .kid-header.collapsed .stat-label {
+            font-size: 0.7rem;
+        }
+
+        .header-content {
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .kid-header.collapsed .header-content {
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+
+        .scroll-hint {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            opacity: 0.8;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+
+        .kid-header.collapsed .scroll-hint {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .scroll-hint-text {
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .scroll-arrow {
+            width: 24px;
+            height: 24px;
+            border-right: 2px solid white;
+            border-bottom: 2px solid white;
+            transform: rotate(45deg);
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0) rotate(45deg); }
+            40% { transform: translateY(-10px) rotate(45deg); }
+            60% { transform: translateY(-5px) rotate(45deg); }
+        }
+
+        /* Timeline Section */
+        .timeline-container {
+            background: #f8f9fa;
+            position: absolute;
+            top: 100vh;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow-y: auto;
+            border-radius: 24px 24px 0 0;
+            box-shadow: 0 -8px 32px rgba(0,0,0,0.15);
+        }
+
+        .timeline-container.visible {
+            top: 120px;
+        }
+
+        .timeline-header {
+            position: sticky;
+            top: 0;
+            background: #f8f9fa;
+            padding: 24px 20px 16px;
+            border-bottom: 1px solid #e9ecef;
+            z-index: 5;
+        }
+
+        .timeline-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .timeline-subtitle {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .calendar-months {
+            padding: 20px 20px 400px 20px;
+            display: flex;
+            flex-direction: column;
+            min-height: 150vh;
+        }
+
+        .calendar-weeks {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .calendar-week {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+            position: relative;
+            min-height: 48px;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .calendar-day {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            justify-self: center;
+            z-index: 2;
+        }
+
+        .calendar-day:hover {
+            transform: scale(1.1);
+        }
+
+        .calendar-day.no-activity {
+            background: #e9ecef;
+        }
+
+        .calendar-day.has-activity {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            box-shadow: 0 2px 8px rgba(255, 154, 158, 0.3);
+        }
+
+        .calendar-day.today {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 2px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .calendar-day.selected {
+            background: #007AFF;
+            transform: scale(1.2);
+            box-shadow: 0 4px 16px rgba(0, 122, 255, 0.4);
+        }
+
+        .day-number {
+            font-size: 0.8rem;
+            color: #333;
+            font-weight: 600;
+            z-index: 3;
+            pointer-events: none;
+        }
+
+        .calendar-day.has-activity .day-number,
+        .calendar-day.today .day-number,
+        .calendar-day.selected .day-number {
+            color: white;
+        }
+
+        .weekdays-header {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+            margin-bottom: 20px;
+            position: sticky;
+            top: 80px;
+            background: #f8f9fa;
+            z-index: 4;
+            padding: 12px 0;
+        }
+
+        .weekday-label {
+            text-align: center;
+            font-size: 0.8rem;
+            color: #666;
+            font-weight: 600;
+        }
+
+        /* Floating Action Button */
+        .fab {
+            position: fixed;
+            bottom: 32px;
+            right: 32px;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            border: none;
+            box-shadow: 0 8px 24px rgba(255, 154, 158, 0.4);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: white;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 100;
+        }
+
+        .fab:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 32px rgba(255, 154, 158, 0.5);
+        }
+
+        .fab:active {
+            transform: scale(0.95);
+        }
+
+        /* Memory Drawer */
+        .memory-drawer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .memory-drawer.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .drawer-content {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-radius: 24px 24px 0 0;
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 -8px 32px rgba(0,0,0,0.2);
+        }
+
+        .memory-drawer.active .drawer-content {
+            transform: translateY(0);
+        }
+
+        .drawer-header {
+            padding: 24px 20px 16px;
+            border-bottom: 1px solid #e9ecef;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+        }
+
+        .drawer-handle {
+            width: 40px;
+            height: 4px;
+            background: #ccc;
+            border-radius: 2px;
+            margin: 0 auto 20px;
+        }
+
+        .drawer-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #333;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .drawer-subtitle {
+            color: #666;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+
+        .memory-form {
+            padding: 24px 20px 40px;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 1rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+            font-family: inherit;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .mood-selector {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .mood-option {
+            aspect-ratio: 1;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            background: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            transition: all 0.2s;
+        }
+
+        .mood-option:hover {
+            border-color: #667eea;
+            transform: scale(1.05);
+        }
+
+        .mood-option.selected {
+            border-color: #667eea;
+            background: #667eea;
+            transform: scale(1.05);
+        }
+
+        .photo-upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #f8f9fa;
+        }
+
+        .photo-upload-area:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .photo-upload-icon {
+            font-size: 2rem;
+            color: #ccc;
+            margin-bottom: 12px;
+        }
+
+        .photo-upload-text {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s;
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn.secondary {
+            background: #6c757d;
+            margin-bottom: 12px;
+        }
+
+        .btn.secondary:hover {
+            background: #5a6268;
+            box-shadow: 0 8px 24px rgba(108, 117, 125, 0.3);
+        }
+
+        @media (max-width: 480px) {
+            .kid-header {
+                padding: 20px;
+            }
+            
+            .kid-name {
+                font-size: 2rem;
+            }
+            
+            .stat-number {
+                font-size: 2.5rem;
+            }
+            
+            .fab {
+                bottom: 20px;
+                right: 20px;
+                width: 56px;
+                height: 56px;
+                font-size: 1.8rem;
+            }
+            
+            .memory-form {
+                padding: 20px 16px 32px;
+            }
+            
+            .mood-selector {
+                grid-template-columns: repeat(5, 1fr);
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="memory-app">
+        <!-- Kid Info Header -->
+        <div class="kid-header" id="kidHeader">
+            <div class="header-content">
+                <div class="kid-avatar">👧</div>
+                <div class="kid-name">Emma</div>
+                <div class="kid-age">8 years old</div>
+                
+                <div class="kid-stats">
+                    <div class="stat-item">
+                        <span class="stat-number" id="memoriesThisYear">23</span>
+                        <span class="stat-label">Memories This Year</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="daysUntilBirthday">127</span>
+                        <span class="stat-label">Days Until Birthday</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="scroll-hint">
+                <div class="scroll-hint-text">Scroll to see memories</div>
+                <div class="scroll-arrow"></div>
+            </div>
+        </div>
+
+        <!-- Timeline Container -->
+        <div class="timeline-container" id="timelineContainer">
+            <div class="timeline-header">
+                <div class="timeline-title">Emma's Memory Timeline</div>
+                <div class="timeline-subtitle">Tap any day to see or add memories</div>
+            </div>
+
+            <div class="weekdays-header">
+                <div class="weekday-label">Mon</div>
+                <div class="weekday-label">Tue</div>
+                <div class="weekday-label">Wed</div>
+                <div class="weekday-label">Thu</div>
+                <div class="weekday-label">Fri</div>
+                <div class="weekday-label">Sat</div>
+                <div class="weekday-label">Sun</div>
+            </div>
+
+            <div class="calendar-months" id="calendarMonths">
+                <!-- Calendar will be generated by JavaScript -->
+            </div>
+            
+            <div style="padding: 40px 20px; text-align: center; color: #666; background: #f8f9fa;">
+                <p>🌟 End of Emma's Memory Timeline 🌟</p>
+                <p style="font-size: 0.9rem; margin-top: 8px;">Keep scrolling up to add more memories!</p>
+            </div>
+        </div>
+
+        <!-- Floating Action Button -->
+        <button class="fab" id="fabButton" title="Add New Memory">+</button>
+    </div>
+
+    <!-- Memory Drawer -->
+    <div class="memory-drawer" id="memoryDrawer">
+        <div class="drawer-content">
+            <div class="drawer-header">
+                <div class="drawer-handle"></div>
+                <div class="drawer-title" id="drawerTitle">Add New Memory</div>
+                <div class="drawer-subtitle" id="drawerSubtitle">What happened today?</div>
+            </div>
+
+            <div class="memory-form">
+                <div class="form-group">
+                    <label class="form-label">Memory Title</label>
+                    <input type="text" class="form-input" id="memoryTitle" placeholder="What was the best part of today?">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Tell me more about it</label>
+                    <textarea class="form-input form-textarea" id="memoryDescription" placeholder="Describe what happened, who was there, how it made you feel..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">How did you feel?</label>
+                    <div class="mood-selector">
+                        <div class="mood-option" data-mood="happy">😊</div>
+                        <div class="mood-option" data-mood="excited">🤩</div>
+                        <div class="mood-option" data-mood="calm">😌</div>
+                        <div class="mood-option" data-mood="sad">😢</div>
+                        <div class="mood-option" data-mood="silly">🤪</div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Add a Photo</label>
+                    <div class="photo-upload-area" id="photoUpload">
+                        <div class="photo-upload-icon">📷</div>
+                        <div class="photo-upload-text">Tap to add a photo</div>
+                    </div>
+                </div>
+
+                <button class="btn secondary" id="cancelBtn">Cancel</button>
+                <button class="btn" id="saveMemoryBtn">Save Memory</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DB_NAME = "KidsMemoryDB";
+        const DB_VERSION = 1;
+        const STORE_NAME = "memories";
+
+        class KidsMemoryApp {
+            constructor() {
+                this.memories = {};
+                this.db = null;
+                this.selectedDate = null;
+                this.selectedMood = null;
+                
+                // Kid's info - this could come from settings/config
+                this.kidInfo = {
+                    name: "Emma",
+                    birthday: "2025-11-09", // November 9th
+                    avatar: "👧"
+                };
+            }
+
+            async initApp() {
+                try {
+                    this.db = await this.initDB();
+                    await this.loadMemories();
+                    await this.addSampleMemories(); // Add sample data for demo
+                    this.initUI();
+                    this.updateKidStats();
+                } catch (error) {
+                    console.error("Failed to initialize app:", error);
+                    this.initUI();
+                }
+            }
+
+            initDB() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(STORE_NAME)) {
+                            const store = db.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
+                            store.createIndex("date_idx", "date", { unique: false });
+                        }
+                    };
+
+                    request.onsuccess = (event) => resolve(event.target.result);
+                    request.onerror = (event) => reject(event.target.error);
+                });
+            }
+
+            async addSampleMemories() {
+                // Add sample memories for demo purposes
+                const sampleDates = [
+                    '2025-06-03', '2025-06-01', '2025-05-30', '2025-05-28', 
+                    '2025-05-25', '2025-05-20', '2025-05-15', '2025-05-10',
+                    '2025-05-05', '2025-04-30', '2025-04-25', '2025-04-20',
+                    '2025-04-15', '2025-04-10', '2025-04-05', '2025-03-30',
+                    '2025-03-25', '2025-03-20', '2025-03-15', '2025-03-10',
+                    '2025-03-05', '2025-02-28', '2025-02-25'
+                ];
+                
+                sampleDates.forEach(date => {
+                    this.memories[date] = true;
+                });
+            }
+
+            async loadMemories() {
+                if (!this.db) return;
+                try {
+                    const memories = await this.getAllMemoriesFromDB();
+                    this.memories = {};
+                    memories.forEach(memory => {
+                        this.memories[memory.date] = true;
+                    });
+                } catch (error) {
+                    console.error("Error loading memories:", error);
+                }
+            }
+
+            getAllMemoriesFromDB() {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) return reject("DB not initialized");
+                    const transaction = this.db.transaction(STORE_NAME, "readonly");
+                    const store = transaction.objectStore(STORE_NAME);
+                    const request = store.getAll();
+
+                    request.onsuccess = () => resolve(request.result || []);
+                    request.onerror = (event) => reject(event.target.error);
+                });
+            }
+
+            addMemoryToDB(memoryData) {
+                return new Promise((resolve, reject) => {
+                    if (!this.db) return reject("DB not initialized");
+                    const transaction = this.db.transaction(STORE_NAME, "readwrite");
+                    const store = transaction.objectStore(STORE_NAME);
+                    const request = store.add(memoryData);
+
+                    request.onsuccess = (event) => resolve(event.target.result);
+                    request.onerror = (event) => reject(event.target.error);
+                });
+            }
+
+            initUI() {
+                this.generateCalendar();
+                this.attachEventListeners();
+                this.setupScrollHandler();
+            }
+
+            generateCalendar() {
+                const monthsContainer = document.getElementById('calendarMonths');
+                monthsContainer.innerHTML = '';
+                
+                const today = new Date();
+                const startWeek = new Date(today);
+                startWeek.setDate(today.getDate() - ((today.getDay() + 6) % 7)); // Monday as start of week
+                
+                const allWeeksContainer = document.createElement('div');
+                allWeeksContainer.className = 'calendar-weeks';
+                monthsContainer.appendChild(allWeeksContainer);
+                
+                // Generate about 156 weeks (3 years) to ensure plenty of scrollable content
+                for (let weekOffset = 0; weekOffset < 156; weekOffset++) {
+                    const weekStart = new Date(startWeek);
+                    weekStart.setDate(startWeek.getDate() - (weekOffset * 7));
+                    const weekElement = this.createWeekElement(weekStart, today);
+                    allWeeksContainer.appendChild(weekElement);
+                }
+            }
+
+            createWeekElement(weekStartDate, today) {
+                const weekElement = document.createElement('div');
+                weekElement.className = 'calendar-week';
+                
+                for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+                    const dayDate = new Date(weekStartDate);
+                    dayDate.setDate(weekStartDate.getDate() + dayOffset);
+                    const dateStr = this.formatDate(dayDate);
+                    const hasMemory = !!this.memories[dateStr];
+                    const isToday = dayDate.toDateString() === today.toDateString();
+                    
+                    const dayElement = this.createDayElement({
+                        date: dayDate,
+                        dateStr,
+                        hasMemory,
+                        isToday,
+                        dayNumber: dayDate.getDate()
+                    });
+                    
+                    weekElement.appendChild(dayElement);
+                }
+                
+                return weekElement;
+            }
+
+            createDayElement(dayData) {
+                const dayElement = document.createElement('div');
+                dayElement.className = 'calendar-day';
+                dayElement.dataset.dateStr = dayData.dateStr;
+
+                if (dayData.isToday) {
+                    dayElement.classList.add('today');
+                } else if (dayData.hasMemory) {
+                    dayElement.classList.add('has-activity');
+                } else {
+                    dayElement.classList.add('no-activity');
+                }
+                
+                const dayNumberDiv = document.createElement('div');
+                dayNumberDiv.className = 'day-number';
+                dayNumberDiv.textContent = dayData.dayNumber;
+                dayElement.appendChild(dayNumberDiv);
+                
+                return dayElement;
+            }
+
+            formatDate(date) {
+                return date.toISOString().split('T')[0];
+            }
+
+            formatDateForDisplay(dateStr) {
+                const options = { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                };
+                return new Date(dateStr).toLocaleDateString('en-US', options);
+            }
+
+            calculateDaysUntilBirthday() {
+                const today = new Date();
+                const currentYear = today.getFullYear();
+                let birthday = new Date(this.kidInfo.birthday);
+                birthday.setFullYear(currentYear);
+                
+                // If birthday has passed this year, calculate for next year
+                if (birthday < today) {
+                    birthday.setFullYear(currentYear + 1);
+                }
+                
+                const diffTime = birthday - today;
+                return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            }
+
+            countMemoriesThisYear() {
+                const currentYear = new Date().getFullYear();
+                let count = 0;
+                
+                Object.keys(this.memories).forEach(dateStr => {
+                    const memoryDate = new Date(dateStr);
+                    if (memoryDate.getFullYear() === currentYear && this.memories[dateStr]) {
+                        count++;
+                    }
+                });
+                
+                return count;
+            }
+
+            updateKidStats() {
+                const memoriesCount = this.countMemoriesThisYear();
+                const daysUntilBirthday = this.calculateDaysUntilBirthday();
+                
+                document.getElementById('memoriesThisYear').textContent = memoriesCount;
+                document.getElementById('daysUntilBirthday').textContent = daysUntilBirthday;
+            }
+
+            setupScrollHandler() {
+                const kidHeader = document.getElementById('kidHeader');
+                const timelineContainer = document.getElementById('timelineContainer');
+                
+                window.addEventListener('scroll', () => {
+                    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                    const threshold = 200; // Trigger when scrolled 200px
+                    
+                    // Debug: log scroll position
+                    console.log('Scroll position:', scrollTop);
+                    
+                    if (scrollTop > threshold) {
+                        kidHeader.classList.add('collapsed');
+                        timelineContainer.classList.add('visible');
+                    } else {
+                        kidHeader.classList.remove('collapsed');
+                        timelineContainer.classList.remove('visible');
+                    }
+                });
+                
+                // Force check if page is actually scrollable
+                const totalHeight = document.documentElement.scrollHeight;
+                const viewportHeight = window.innerHeight;
+                console.log('Total page height:', totalHeight, 'Viewport height:', viewportHeight);
+                
+                if (totalHeight <= viewportHeight) {
+                    console.warn('Page is not scrollable - not enough content height');
+                }
+            }
+
+            openMemoryDrawer(dateStr = null) {
+                this.selectedDate = dateStr || this.formatDate(new Date());
+                
+                const drawer = document.getElementById('memoryDrawer');
+                const drawerTitle = document.getElementById('drawerTitle');
+                const drawerSubtitle = document.getElementById('drawerSubtitle');
+                
+                if (dateStr) {
+                    drawerTitle.textContent = 'Add Memory';
+                    drawerSubtitle.textContent = this.formatDateForDisplay(dateStr);
+                } else {
+                    drawerTitle.textContent = 'Add Today\'s Memory';
+                    drawerSubtitle.textContent = this.formatDateForDisplay(this.selectedDate);
+                }
+                
+                this.clearMemoryForm();
+                drawer.classList.add('active');
+            }
+
+            closeMemoryDrawer() {
+                const drawer = document.getElementById('memoryDrawer');
+                drawer.classList.remove('active');
+                this.selectedDate = null;
+                this.selectedMood = null;
+            }
+
+            clearMemoryForm() {
+                document.getElementById('memoryTitle').value = '';
+                document.getElementById('memoryDescription').value = '';
+                
+                // Clear mood selection
+                document.querySelectorAll('.mood-option').forEach(option => {
+                    option.classList.remove('selected');
+                });
+                
+                this.selectedMood = null;
+            }
+
+            async saveMemory() {
+                const title = document.getElementById('memoryTitle').value.trim();
+                const description = document.getElementById('memoryDescription').value.trim();
+                
+                if (!title) {
+                    alert('Please add a title for your memory!');
+                    return;
+                }
+
+                try {
+                    const memoryData = {
+                        date: this.selectedDate,
+                        title,
+                        description,
+                        mood: this.selectedMood,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    await this.addMemoryToDB(memoryData);
+                    this.memories[this.selectedDate] = true;
+                    
+                    // Refresh UI
+                    this.generateCalendar();
+                    this.updateKidStats();
+                    this.closeMemoryDrawer();
+                    
+                    // Show success message
+                    this.showSuccessMessage();
+                    
+                } catch (error) {
+                    console.error("Error saving memory:", error);
+                    alert("Failed to save memory. Please try again.");
+                }
+            }
+
+            showSuccessMessage() {
+                // Create a temporary success message
+                const message = document.createElement('div');
+                message.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+                    color: white;
+                    padding: 16px 24px;
+                    border-radius: 12px;
+                    font-weight: 600;
+                    z-index: 10000;
+                    box-shadow: 0 8px 24px rgba(255, 154, 158, 0.4);
+                `;
+                message.textContent = '✨ Memory saved!';
+                document.body.appendChild(message);
+                
+                setTimeout(() => {
+                    message.remove();
+                }, 2000);
+            }
+
+            attachEventListeners() {
+                // FAB click
+                document.getElementById('fabButton').addEventListener('click', () => {
+                    this.openMemoryDrawer();
+                });
+
+                // Calendar day clicks
+                const calendarMonths = document.getElementById('calendarMonths');
+                calendarMonths.addEventListener('click', (event) => {
+                    let targetDay = event.target;
+                    if (targetDay.classList.contains('day-number')) {
+                        targetDay = targetDay.closest('.calendar-day');
+                    }
+                    if (targetDay && targetDay.classList.contains('calendar-day') && targetDay.dataset.dateStr) {
+                        this.openMemoryDrawer(targetDay.dataset.dateStr);
+                    }
+                });
+
+                // Drawer close events
+                document.getElementById('memoryDrawer').addEventListener('click', (e) => {
+                    if (e.target.id === 'memoryDrawer') {
+                        this.closeMemoryDrawer();
+                    }
+                });
+
+                document.getElementById('cancelBtn').addEventListener('click', () => {
+                    this.closeMemoryDrawer();
+                });
+
+                // Save memory
+                document.getElementById('saveMemoryBtn').addEventListener('click', () => {
+                    this.saveMemory();
+                });
+
+                // Mood selection
+                document.querySelectorAll('.mood-option').forEach(option => {
+                    option.addEventListener('click', () => {
+                        document.querySelectorAll('.mood-option').forEach(opt => {
+                            opt.classList.remove('selected');
+                        });
+                        option.classList.add('selected');
+                        this.selectedMood = option.dataset.mood;
+                    });
+                });
+
+                // Scroll hint click
+                document.querySelector('.scroll-hint').addEventListener('click', () => {
+                    window.scrollTo({
+                        top: window.innerHeight,
+                        behavior: 'smooth'
+                    });
+                });
+            }
+        }
+
+        // Initialize app
+        let memoryApp;
+        document.addEventListener('DOMContentLoaded', () => {
+            memoryApp = new KidsMemoryApp();
+            memoryApp.initApp();
+        });
+    </script>
+</body>
+</html>

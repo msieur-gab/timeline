@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emma's Memory Calendar</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #B8BCC4;
+            --bg-secondary: #E8E8E8;
+            --text-primary: #FFFFFF;
+            --text-secondary: #666666;
+            --memory-active: #9E9E9E;
+            --memory-pill: #9E9E9E;
+            --no-memory: #D1D5DB;
+            --today-marker: #000000;
+            
+            /* Dynamic height controls */
+            --initial-header-vh: 100;
+            --min-header-px: 80; /* Fixed 80px minimum */
+            --scroll-distance-for-full-effect: 500;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            color: #333;
+        }
+
+        /* Main container - sticky with fixed viewport height */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            left: 0;
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            overflow: hidden; /* Prevent any overflow issues */
+        }
+
+        /* Header Section - Shrinks */
+        .header-section {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh; /* Exactly 100vh on load */
+            min-height: 80px; /* Fixed 80px minimum */
+            overflow: hidden;
+            transition: height 0.05s linear;
+            will-change: height;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            flex-shrink: 0; /* Don't let flex container shrink this */
+        }
+
+        .header-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px 40px 20px;
+            position: relative;
+            width: 100%;
+        }
+
+        /* Header controls */
+        .header-controls {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .toggle-btn {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+            touch-action: manipulation;
+        }
+
+        .toggle-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .toggle-btn.active {
+            background: rgba(255,255,255,0.9);
+            color: #333;
+        }
+
+        /* Initial content (visible when expanded) */
+        .initial-content {
+            display: block;
+            text-align: center;
+        }
+
+        .kid-photo {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23E8E8E8"/><circle cx="70" cy="55" r="20" fill="%23B8BCC4" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%23B8BCC4" opacity="0.7"/></svg>');
+            background-size: cover;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .kid-name {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .kid-age {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 40px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 60px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 5rem;
+            font-weight: 200;
+            line-height: 0.8;
+            margin-bottom: 16px;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            opacity: 0.9;
+            line-height: 1.4;
+        }
+
+        .scroll-hint {
+            margin-top: 40px;
+            opacity: 0.8;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .scroll-hint::after {
+            content: '↓';
+            display: block;
+            text-align: center;
+            margin-top: 8px;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-8px); }
+            60% { transform: translateY(-4px); }
+        }
+
+        /* Compact content (visible when shrunk) */
+        .compact-content {
+            display: none; /* Hidden by default */
+            align-items: center;
+            width: calc(100% - 3rem);
+            position: absolute;
+            top: 50%;
+            left: 1.5rem;
+            transform: translateY(-50%);
+            pointer-events: none;
+            transform-origin: left center;
+        }
+
+        .compact-photo {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="%23E8E8E8"/><circle cx="16" cy="12" r="4" fill="%23B8BCC4" opacity="0.7"/><ellipse cx="16" cy="22" rx="6" ry="4" fill="%23B8BCC4" opacity="0.7"/></svg>');
+            background-size: cover;
+            margin-right: 12px;
+        }
+
+        .compact-text {
+            font-size: 0.9rem;
+        }
+
+        .compact-text .stat-number {
+            display: inline;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-right: 0.25rem;
+        }
+
+        .compact-text .stat-label {
+            display: inline;
+            font-size: 0.9rem;
+        }
+
+        /* Calendar Section - Grows */
+        .calendar-section {
+            background: var(--bg-secondary);
+            padding: 20px;
+            height: 0; /* Start at 0 height, no vh units */
+            max-height: 0; /* Ensure it's truly hidden initially */
+            overflow: hidden; /* Hidden when height is 0 */
+            transition: height 0.05s linear, max-height 0.05s linear;
+            will-change: height;
+            flex-shrink: 0; /* Don't let flex container affect this */
+        }
+
+        .weekdays-header {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+            margin-bottom: 16px;
+            padding: 8px 0;
+            position: sticky;
+            top: 0;
+            background: var(--bg-secondary);
+            z-index: 10;
+        }
+
+        .weekday-label {
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .weekdays-header.hidden {
+            display: none;
+        }
+
+        .calendar-weeks {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-bottom: 100px;
+        }
+
+        .calendar-week {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+            position: relative;
+            min-height: 32px;
+            align-items: center;
+        }
+
+        .calendar-day {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.15s ease;
+            justify-self: center;
+            z-index: 2;
+            touch-action: manipulation;
+        }
+
+        .calendar-day:hover {
+            transform: scale(1.1);
+        }
+
+        .calendar-day:active {
+            transform: scale(0.95);
+        }
+
+        .calendar-day.no-memory {
+            background: var(--no-memory);
+        }
+
+        .calendar-day.has-memory {
+            background: var(--memory-active);
+        }
+
+        .calendar-day.today {
+            background: var(--today-marker);
+        }
+
+        .calendar-day.selected {
+            background: var(--memory-active);
+            transform: scale(1.2);
+        }
+
+        .day-number {
+            font-size: 0.7rem;
+            color: #333;
+            font-weight: 500;
+            pointer-events: none;
+        }
+
+        .calendar-day.has-memory .day-number,
+        .calendar-day.today .day-number,
+        .calendar-day.selected .day-number {
+            color: white;
+        }
+
+        .day-number.hidden {
+            display: none;
+        }
+
+        /* Scroll extender to provide scroll distance */
+        .scroll-extender {
+            height: 150vh;
+            background-color: #e5e7eb;
+            padding-top: 2rem;
+            text-align: center;
+            color: #6b7280;
+        }
+
+        /* Swipe indicator */
+        .swipe-indicator {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(158, 158, 158, 0.9);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 1001;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .swipe-indicator.show {
+            opacity: 1;
+        }
+
+        /* Floating add button */
+        .floating-add-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 50%;
+            transform: translateX(200px);
+            width: 60px;
+            height: 60px;
+            background: var(--memory-active);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 8px 25px rgba(158, 158, 158, 0.4);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            touch-action: manipulation;
+        }
+
+        .floating-add-btn:hover {
+            transform: translateX(200px) scale(1.1);
+            box-shadow: 0 12px 35px rgba(158, 158, 158, 0.5);
+        }
+
+        .floating-add-btn:active {
+            transform: translateX(200px) scale(0.95);
+        }
+
+        /* Memory drawer and modal styles */
+        .memory-drawer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: #fff;
+            z-index: 2000;
+            transform: translateY(100%);
+            transition: transform 0.4s ease;
+            overflow-y: auto;
+        }
+
+        .memory-drawer.active {
+            transform: translateY(0);
+        }
+
+        .drawer-header {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 20px;
+            position: sticky;
+            top: 0;
+        }
+
+        .drawer-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .drawer-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .drawer-close {
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 28px;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 50%;
+            transition: background 0.2s;
+            touch-action: manipulation;
+        }
+
+        .drawer-close:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .drawer-content {
+            padding: 30px 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .memory-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1500;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .memory-modal.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 400px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            transform: scale(0.8);
+            transition: transform 0.3s ease;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .memory-modal.active .modal-content {
+            transform: scale(1);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 0.95rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--memory-active);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(158, 158, 158, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
+        }
+
+        .save-memory-btn {
+            background: var(--memory-active);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+            touch-action: manipulation;
+        }
+
+        .save-memory-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(158, 158, 158, 0.3);
+        }
+
+        .save-memory-btn:active {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            padding: 4px;
+            border-radius: 4px;
+            transition: background 0.2s;
+            touch-action: manipulation;
+        }
+
+        .close-btn:hover {
+            background: #f5f5f5;
+        }
+
+        .memories-list {
+            margin-bottom: 20px;
+        }
+
+        .memory-item {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 4px solid var(--memory-active);
+        }
+
+        .memory-content {
+            color: #333;
+            line-height: 1.5;
+            margin-bottom: 8px;
+        }
+
+        .memory-meta {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 40px 20px;
+        }
+
+        @media (max-width: 480px) {
+            .app-container {
+                max-width: none;
+            }
+            
+            .floating-add-btn {
+                transform: translateX(160px);
+            }
+            
+            .floating-add-btn:hover {
+                transform: translateX(160px) scale(1.1);
+            }
+
+            .stats {
+                gap: 40px;
+            }
+
+            .stat-number {
+                font-size: 4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header Section -->
+        <div class="header-section" id="headerSection">
+            <div class="header-content">
+                <div class="header-controls">
+                    <button class="toggle-btn active" id="toggleWeekdays">Days</button>
+                    <button class="toggle-btn active" id="toggleNumbers">Nums</button>
+                </div>
+                
+                <!-- Initial expanded content -->
+                <div class="initial-content" id="initialContent">
+                    <div class="kid-photo"></div>
+                    <div class="kid-name">Emma</div>
+                    <div class="kid-age">8 years old</div>
+                    
+                    <div class="stats">
+                        <div class="stat-item">
+                            <div class="stat-number">5</div>
+                            <div class="stat-label">memories this<br>year</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">133</div>
+                            <div class="stat-label">days to<br>birthday</div>
+                        </div>
+                    </div>
+                    
+                    <div class="scroll-hint">Scroll</div>
+                </div>
+
+                <!-- Compact shrunk content -->
+                <div class="compact-content" id="compactContent">
+                    <div class="compact-photo"></div>
+                    <div class="compact-text">
+                        <span class="stat-number">5</span>
+                        <span class="stat-label">memories • Emma, 8 years old</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Calendar Section -->
+        <div class="calendar-section" id="calendarSection">
+            <div class="weekdays-header" id="weekdaysHeader">
+                <div class="weekday-label">M</div>
+                <div class="weekday-label">T</div>
+                <div class="weekday-label">W</div>
+                <div class="weekday-label">T</div>
+                <div class="weekday-label">F</div>
+                <div class="weekday-label">S</div>
+                <div class="weekday-label">S</div>
+            </div>
+            <div class="calendar-weeks" id="calendarWeeks">
+                <!-- Calendar will be generated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Scroll extender -->
+    <div class="scroll-extender">
+        <p>Scroll down to see the effect on the header and calendar.</p>
+        <p style="margin-top: 1rem; opacity: 0.7;">Try swiping gestures once the calendar is visible!</p>
+    </div>
+
+    <!-- Swipe indicator -->
+    <div class="swipe-indicator" id="swipeIndicator">Swipe detected!</div>
+
+    <!-- Floating Add Button -->
+    <button class="floating-add-btn" id="addMemoryBtn">+</button>
+
+    <!-- Memory Modal -->
+    <div class="memory-modal" id="memoryModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="modalTitle">Memories</div>
+                <button class="close-btn" id="closeModal">&times;</button>
+            </div>
+            <div class="memories-list" id="memoriesList">
+                <div class="empty-state">No memories yet for this day. Add your first memory!</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Memory Drawer -->
+    <div class="memory-drawer" id="memoryDrawer">
+        <div class="drawer-header">
+            <div class="drawer-title-row">
+                <div class="drawer-title">Add Memory</div>
+                <button class="drawer-close" id="closeDrawer">×</button>
+            </div>
+            <div>Capture a special moment</div>
+        </div>
+        
+        <div class="drawer-content">
+            <form id="memoryForm">
+                <div class="form-group">
+                    <label class="form-label" for="memoryContent">What happened?</label>
+                    <textarea 
+                        class="form-input form-textarea" 
+                        id="memoryContent" 
+                        placeholder="Tell the story of this special moment..."
+                        required
+                    ></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="memoryDate">When?</label>
+                    <input 
+                        type="date" 
+                        class="form-input" 
+                        id="memoryDate" 
+                        required
+                    />
+                </div>
+
+                <button type="submit" class="save-memory-btn">Save Memory</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const headerSection = document.getElementById('headerSection');
+            const calendarSection = document.getElementById('calendarSection');
+            const initialContent = document.getElementById('initialContent');
+            const compactContent = document.getElementById('compactContent');
+
+            const rootStyles = getComputedStyle(document.documentElement);
+            const INITIAL_HEADER_VH = parseFloat(rootStyles.getPropertyValue('--initial-header-vh').trim());
+            const MIN_HEADER_PX = parseFloat(rootStyles.getPropertyValue('--min-header-px').trim());
+            const SCROLL_DISTANCE_FOR_FULL_EFFECT = parseFloat(rootStyles.getPropertyValue('--scroll-distance-for-full-effect').trim());
+
+            function updateHeights() {
+                const scrollY = window.scrollY;
+                const viewportHeight = window.innerHeight;
+
+                const initialHeaderPx = viewportHeight * (INITIAL_HEADER_VH / 100);
+                const minHeaderPx = MIN_HEADER_PX; // Fixed 80px
+                const totalShrinkableHeightPx = initialHeaderPx - minHeaderPx;
+                
+                let shrinkProgress = 0;
+                if (SCROLL_DISTANCE_FOR_FULL_EFFECT > 0) {
+                    shrinkProgress = Math.min(scrollY / SCROLL_DISTANCE_FOR_FULL_EFFECT, 1);
+                } else if (scrollY > 0) {
+                    shrinkProgress = 1;
+                }
+                
+                // Only modify heights when scrolling
+                if (scrollY > 0) {
+                    const currentShrinkAmountPx = totalShrinkableHeightPx * shrinkProgress;
+                    let currentHeaderPx = initialHeaderPx - currentShrinkAmountPx;
+                    currentHeaderPx = Math.max(minHeaderPx, Math.min(currentHeaderPx, initialHeaderPx));
+
+                    headerSection.style.height = `${currentHeaderPx}px`;
+                    
+                    let calendarHeight = viewportHeight - currentHeaderPx;
+                    if (calendarHeight < 0) calendarHeight = 0;
+                    
+                    calendarSection.style.height = `${calendarHeight}px`;
+                    calendarSection.style.maxHeight = `${calendarHeight}px`;
+                    calendarSection.style.overflow = 'auto';
+                } else {
+                    // Reset to CSS defaults when at top - let CSS handle initial state
+                    headerSection.style.height = '';
+                    calendarSection.style.height = '';
+                    calendarSection.style.maxHeight = '';
+                    calendarSection.style.overflow = '';
+                }
+
+                // Animation logic using transforms
+                
+                // Initial Content - fade out and scale down
+                if (shrinkProgress < 1) {
+                    initialContent.style.display = 'block';
+                    if (shrinkProgress > 0) {
+                        initialContent.style.transform = `translateY(${-shrinkProgress * 50}px) scale(${1 - shrinkProgress * 0.3})`;
+                        initialContent.style.opacity = 1 - shrinkProgress;
+                    } else {
+                        // Reset transforms when at top
+                        initialContent.style.transform = '';
+                        initialContent.style.opacity = '';
+                    }
+                } else {
+                    initialContent.style.display = 'none';
+                }
+
+                // Compact Content - scale in
+                if (shrinkProgress > 0) {
+                    compactContent.style.display = 'flex';
+                    compactContent.style.transform = `scale(${shrinkProgress})`;
+                    compactContent.style.opacity = shrinkProgress;
+                    compactContent.style.pointerEvents = shrinkProgress === 1 ? 'auto' : 'none';
+                } else {
+                    compactContent.style.display = 'none';
+                }
+            }
+
+            // Touch and swipe detection
+            let touchStartY = 0;
+            let touchStartX = 0;
+            let touchStartTime = 0;
+            const swipeIndicator = document.getElementById('swipeIndicator');
+
+            function handleTouchStart(e) {
+                const touch = e.touches[0];
+                touchStartY = touch.clientY;
+                touchStartX = touch.clientX;
+                touchStartTime = Date.now();
+            }
+
+            function handleTouchEnd(e) {
+                if (!e.changedTouches[0]) return;
+
+                const touch = e.changedTouches[0];
+                const deltaY = touch.clientY - touchStartY;
+                const deltaX = touch.clientX - touchStartX;
+                const deltaTime = Date.now() - touchStartTime;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const velocity = distance / deltaTime;
+
+                // Detect swipe
+                if (distance > 50 && deltaTime < 300 && velocity > 0.3) {
+                    const angle = Math.atan2(Math.abs(deltaY), Math.abs(deltaX)) * 180 / Math.PI;
+                    
+                    let swipeDirection = '';
+                    if (angle < 45) {
+                        swipeDirection = deltaX > 0 ? 'right' : 'left';
+                    } else {
+                        swipeDirection = deltaY > 0 ? 'down' : 'up';
+                    }
+
+                    // Show swipe indicator
+                    swipeIndicator.textContent = `Swiped ${swipeDirection}!`;
+                    swipeIndicator.classList.add('show');
+                    
+                    setTimeout(() => {
+                        swipeIndicator.classList.remove('show');
+                    }, 1500);
+
+                    // Handle swipe actions
+                    handleSwipe(swipeDirection);
+                }
+            }
+
+            function handleSwipe(direction) {
+                switch(direction) {
+                    case 'up':
+                        window.scrollTo({
+                            top: SCROLL_DISTANCE_FOR_FULL_EFFECT + 100,
+                            behavior: 'smooth'
+                        });
+                        break;
+                    case 'down':
+                        if (window.pageYOffset > 50) {
+                            window.scrollTo({
+                                top: 0,
+                                behavior: 'smooth'
+                            });
+                        }
+                        break;
+                    case 'left':
+                        document.getElementById('memoryDrawer').classList.add('active');
+                        break;
+                    case 'right':
+                        document.getElementById('memoryDrawer').classList.remove('active');
+                        document.getElementById('memoryModal').classList.remove('active');
+                        break;
+                }
+            }
+
+            // Calendar generation
+            function generateCalendar() {
+                const weeksContainer = document.getElementById('calendarWeeks');
+                weeksContainer.innerHTML = '';
+                
+                const today = new Date();
+                const startWeek = new Date(today);
+                startWeek.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+                
+                for (let weekOffset = 0; weekOffset < 104; weekOffset++) {
+                    const weekStart = new Date(startWeek);
+                    weekStart.setDate(startWeek.getDate() - (weekOffset * 7));
+                    const weekElement = createWeekElement(weekStart, today);
+                    weeksContainer.appendChild(weekElement);
+                }
+            }
+
+            function createWeekElement(weekStartDate, today) {
+                const weekElement = document.createElement('div');
+                weekElement.className = 'calendar-week';
+                
+                for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+                    const dayDate = new Date(weekStartDate);
+                    dayDate.setDate(weekStartDate.getDate() + dayOffset);
+                    const dayElement = createDayElement(dayDate, today);
+                    weekElement.appendChild(dayElement);
+                }
+                
+                return weekElement;
+            }
+
+            function createDayElement(dayDate, today) {
+                const dayElement = document.createElement('div');
+                dayElement.className = 'calendar-day';
+                
+                const isToday = dayDate.toDateString() === today.toDateString();
+                const hasMemory = Math.random() > 0.7 && !isToday;
+                
+                if (isToday) {
+                    dayElement.classList.add('today');
+                } else if (hasMemory) {
+                    dayElement.classList.add('has-memory');
+                } else {
+                    dayElement.classList.add('no-memory');
+                }
+                
+                const dayNumberDiv = document.createElement('div');
+                dayNumberDiv.className = 'day-number';
+                dayNumberDiv.textContent = dayDate.getDate();
+                dayElement.appendChild(dayNumberDiv);
+                
+                // Add click handler for memories
+                dayElement.addEventListener('click', () => {
+                    document.getElementById('memoryModal').classList.add('active');
+                });
+                
+                return dayElement;
+            }
+
+            // Event listeners
+            window.addEventListener('scroll', updateHeights);
+            window.addEventListener('resize', updateHeights);
+
+            // NO initial call to updateHeights - let CSS handle initial state completely
+            // Only run if user has already scrolled when page loads (e.g., refresh mid-scroll)
+            if (window.scrollY > 10) {
+                updateHeights();
+            }
+
+            // Touch event listeners
+            document.addEventListener('touchstart', handleTouchStart, { passive: true });
+            document.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+            // Toggle functionality
+            document.getElementById('toggleWeekdays').addEventListener('click', function() {
+                this.classList.toggle('active');
+                document.getElementById('weekdaysHeader').classList.toggle('hidden');
+            });
+
+            document.getElementById('toggleNumbers').addEventListener('click', function() {
+                this.classList.toggle('active');
+                document.querySelectorAll('.day-number').forEach(el => {
+                    el.classList.toggle('hidden');
+                });
+            });
+
+            // Drawer functionality
+            document.getElementById('addMemoryBtn').addEventListener('click', () => {
+                document.getElementById('memoryDrawer').classList.add('active');
+                // Set today's date
+                document.getElementById('memoryDate').value = new Date().toISOString().split('T')[0];
+            });
+
+            document.getElementById('closeDrawer').addEventListener('click', () => {
+                document.getElementById('memoryDrawer').classList.remove('active');
+            });
+
+            // Modal functionality
+            document.getElementById('closeModal').addEventListener('click', () => {
+                document.getElementById('memoryModal').classList.remove('active');
+            });
+
+            document.getElementById('memoryModal').addEventListener('click', (e) => {
+                if (e.target === e.currentTarget) {
+                    document.getElementById('memoryModal').classList.remove('active');
+                }
+            });
+
+            // Form handling
+            document.getElementById('memoryForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                // Here you would save the memory
+                alert('Memory saved! (This would connect to your backend)');
+                document.getElementById('memoryDrawer').classList.remove('active');
+                document.getElementById('memoryForm').reset();
+            });
+
+            // Initialize
+            generateCalendar();
+        });
+    </script>
+</body>
+</html>

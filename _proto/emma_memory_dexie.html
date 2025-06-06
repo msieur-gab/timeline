@@ -1,0 +1,1681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emma's Memory Header</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.4/dexie.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #B8BCC4;
+            --bg-secondary: #E8E8E8;
+            --text-primary: #FFFFFF;
+            --text-secondary: #666666;
+            --memory-active: #9E9E9E;
+            
+            /* Dynamic height controls */
+            --initial-header-vh: 100;
+            --min-header-px: 80; /* Fixed 80px minimum */
+            --scroll-distance-for-full-effect: 500;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            color: #333;
+        }
+
+        /* Main container - sticky with fixed viewport height */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            left: 0;
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            overflow: hidden; /* Prevent any overflow issues */
+        }
+
+        /* Header Section - Shrinks */
+        .header-section {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh; /* Exactly 100vh on load */
+            min-height: 80px; /* Fixed 80px minimum */
+            overflow: hidden;
+            transition: height 0.05s linear;
+            will-change: height;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            flex-shrink: 0; /* Don't let flex container shrink this */
+        }
+
+        .header-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px 40px 20px;
+            position: relative;
+            width: 100%;
+        }
+
+        /* Header controls */
+        .header-controls {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .toggle-btn {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+            touch-action: manipulation;
+        }
+
+        .toggle-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .toggle-btn.active {
+            background: rgba(255,255,255,0.9);
+            color: #333;
+        }
+
+        /* Initial content (visible when expanded) */
+        .initial-content {
+            display: block;
+            text-align: center;
+        }
+
+        .kid-photo {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23E8E8E8"/><circle cx="70" cy="55" r="20" fill="%23B8BCC4" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%23B8BCC4" opacity="0.7"/></svg>');
+            background-size: cover;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .kid-name {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .kid-age {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 40px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 60px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 5rem;
+            font-weight: 200;
+            line-height: 0.8;
+            margin-bottom: 16px;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            opacity: 0.9;
+            line-height: 1.4;
+        }
+
+        .scroll-hint {
+            margin-top: 40px;
+            opacity: 0.8;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .scroll-hint::after {
+            content: '↓';
+            display: block;
+            text-align: center;
+            margin-top: 8px;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-8px); }
+            60% { transform: translateY(-4px); }
+        }
+
+        /* Compact content (visible when shrunk) */
+        .compact-content {
+            display: none; /* Hidden by default */
+            align-items: center;
+            width: calc(100% - 3rem);
+            position: absolute;
+            top: 50%;
+            left: 1.5rem;
+            transform: translateY(-50%);
+            pointer-events: none;
+            transform-origin: left center;
+        }
+
+        .compact-photo {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="%23E8E8E8"/><circle cx="16" cy="12" r="4" fill="%23B8BCC4" opacity="0.7"/><ellipse cx="16" cy="22" rx="6" ry="4" fill="%23B8BCC4" opacity="0.7"/></svg>');
+            background-size: cover;
+            margin-right: 12px;
+        }
+
+        .compact-text {
+            font-size: 0.9rem;
+        }
+
+        .compact-text .stat-number {
+            display: inline;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-right: 0.25rem;
+        }
+
+        .compact-text .stat-label {
+            display: inline;
+            font-size: 0.9rem;
+        }
+
+        /* Content Section - Takes remaining space */
+        .content-section {
+            background: var(--bg-secondary);
+            padding: 0;
+            height: 0; /* Start at 0 height, no vh units */
+            max-height: 0; /* Ensure it's truly hidden initially */
+            overflow: hidden; /* Hidden when height is 0 */
+            transition: height 0.05s linear, max-height 0.05s linear;
+            will-change: height;
+            flex-shrink: 0; /* Don't let flex container affect this */
+        }
+
+        .timeline-container {
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: var(--bg-secondary);
+        }
+
+        .timeline-header {
+            text-align: center;
+            padding: 20px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+
+        .timeline-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 4px;
+        }
+
+        .timeline-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .timeline {
+            position: relative;
+        }
+
+        /* Date Section Headers - Sticky */
+        .date-section {
+            position: relative;
+        }
+
+        .date-header {
+            position: sticky;
+            top: 81px; /* Below timeline header (80px + 1px border) */
+            z-index: 15;
+            background: var(--bg-secondary);
+            padding: 12px 20px;
+            border-bottom: 1px solid #e5e7eb;
+            font-weight: 600;
+            color: #374151;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .date-memories {
+            background: white;
+        }
+
+        /* Clean timeline items */
+        .timeline-item {
+            position: relative;
+            padding: 16px 20px;
+            border-bottom: 1px solid #f3f4f6;
+            background: white;
+            transition: background-color 0.2s ease;
+        }
+
+        .timeline-item:hover {
+            background: #f9fafb;
+        }
+
+        .timeline-item:last-child {
+            border-bottom: none;
+        }
+
+        /* Remove old styling */
+        .timeline-item::before {
+            display: none;
+        }
+
+        .timeline::before {
+            display: none;
+        }
+
+        .item-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .item-type {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .item-icon {
+            width: 16px;
+            height: 16px;
+            display: inline-block;
+            opacity: 0.7;
+        }
+
+        .item-time {
+            font-size: 0.75rem;
+            color: #9ca3af;
+        }
+
+        .item-content {
+            color: #374151;
+            line-height: 1.5;
+        }
+
+        .message-text {
+            font-size: 0.95rem;
+        }
+
+        /* Clean audio player */
+        .audio-player {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .audio-button {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #6b7280;
+            border: none;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 10px;
+            transition: all 0.2s;
+        }
+
+        .audio-button:hover {
+            background: #4b5563;
+        }
+
+        .audio-info {
+            flex: 1;
+        }
+
+        .audio-duration {
+            font-size: 0.8rem;
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .audio-waveform {
+            height: 2px;
+            background: #e5e7eb;
+            border-radius: 1px;
+            margin-top: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .audio-waveform::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 30%;
+            background: #6b7280;
+            border-radius: 1px;
+        }
+
+        /* Clean picture container */
+        .picture-container {
+            margin-top: 8px;
+            border-radius: 6px;
+            border: 1px solid #e5e7eb;
+            overflow: hidden;
+            background: #f9fafb;
+            aspect-ratio: 16/10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .picture-container:hover {
+            border-color: #d1d5db;
+        }
+
+        .picture-placeholder {
+            color: #6b7280;
+            font-size: 0.8rem;
+            text-align: center;
+        }
+
+        .picture-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Memory creation modal */
+        .memory-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .memory-modal.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 350px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            transform: scale(0.8);
+            transition: transform 0.3s ease;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .memory-modal.active .modal-content {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            padding: 4px;
+            border-radius: 4px;
+            transition: background 0.2s;
+            touch-action: manipulation;
+        }
+
+        .close-btn:hover {
+            background: #f5f5f5;
+        }
+
+        .memory-type-selector {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .type-option {
+            padding: 16px 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: white;
+        }
+
+        .type-option:hover {
+            border-color: var(--memory-active);
+        }
+
+        .type-option.active {
+            border-color: var(--memory-active);
+            background: #f9fafb;
+        }
+
+        .type-option.message.active {
+            border-color: #10b981;
+            background: #ecfdf5;
+        }
+
+        .type-option.audio.active {
+            border-color: #f59e0b;
+            background: #fffbeb;
+        }
+
+        .type-option.picture.active {
+            border-color: #8b5cf6;
+            background: #f5f3ff;
+        }
+
+        .type-icon {
+            font-size: 1.5rem;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .type-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: #374151;
+            font-size: 0.9rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            background: #fafafa;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--memory-active);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(158, 158, 158, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+            font-family: inherit;
+        }
+
+        .audio-controls {
+            display: none;
+            background: #fffbeb;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        .audio-controls.active {
+            display: block;
+        }
+
+        .record-btn {
+            background: #f59e0b;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .record-btn:hover {
+            background: #d97706;
+        }
+
+        .record-btn.recording {
+            background: #dc2626;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .picture-controls {
+            display: none;
+            background: #f5f3ff;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        .picture-controls.active {
+            display: block;
+        }
+
+        .picture-btn {
+            background: #8b5cf6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin: 0 5px;
+        }
+
+        .picture-btn:hover {
+            background: #7c3aed;
+        }
+
+        .save-memory-btn {
+            background: var(--memory-active);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+            touch-action: manipulation;
+        }
+
+        .save-memory-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(158, 158, 158, 0.3);
+        }
+
+        .save-memory-btn:active {
+            transform: translateY(0);
+        }
+
+        .save-memory-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Scrollbar styling */
+        .timeline-container::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .timeline-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .timeline-container::-webkit-scrollbar-thumb {
+            background: var(--memory-active);
+            border-radius: 2px;
+        }
+
+        .timeline-container::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+
+        /* Scroll extender to provide scroll distance */
+        .scroll-extender {
+            height: 200vh;
+            background: linear-gradient(to bottom, #e5e7eb, #f3f4f6);
+            padding: 2rem;
+            text-align: center;
+            color: #6b7280;
+        }
+
+        .scroll-extender h3 {
+            color: #374151;
+            margin-bottom: 1rem;
+        }
+
+        .scroll-extender p {
+            margin-bottom: 0.5rem;
+            opacity: 0.8;
+        }
+
+        /* Swipe indicator */
+        .swipe-indicator {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(158, 158, 158, 0.9);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 1001;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .swipe-indicator.show {
+            opacity: 1;
+        }
+
+        /* Floating add button */
+        .floating-add-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 50%;
+            transform: translateX(200px);
+            width: 60px;
+            height: 60px;
+            background: var(--memory-active);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 8px 25px rgba(158, 158, 158, 0.4);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            touch-action: manipulation;
+        }
+
+        .floating-add-btn:hover {
+            transform: translateX(200px) scale(1.1);
+            box-shadow: 0 12px 35px rgba(158, 158, 158, 0.5);
+        }
+
+        .floating-add-btn:active {
+            transform: translateX(200px) scale(0.95);
+        }
+
+        /* Loading indicator */
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #6b7280;
+        }
+
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60% { content: '...'; }
+            80%, 100% { content: '...'; }
+        }
+
+        @media (max-width: 480px) {
+            .app-container {
+                max-width: none;
+            }
+            
+            .floating-add-btn {
+                transform: translateX(160px);
+            }
+            
+            .floating-add-btn:hover {
+                transform: translateX(160px) scale(1.1);
+            }
+
+            .stats {
+                gap: 40px;
+            }
+
+            .stat-number {
+                font-size: 4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header Section -->
+        <div class="header-section" id="headerSection">
+            <div class="header-content">
+                <div class="header-controls">
+                    <button class="toggle-btn active" id="toggleMode">Mode</button>
+                    <button class="toggle-btn" id="toggleTest">Debug</button>
+                </div>
+                
+                <!-- Initial expanded content -->
+                <div class="initial-content" id="initialContent">
+                    <div class="kid-photo"></div>
+                    <div class="kid-name">Emma</div>
+                    <div class="kid-age">8 years old</div>
+                    
+                    <div class="stats">
+                        <div class="stat-item">
+                            <div class="stat-number" id="memoryCount">0</div>
+                            <div class="stat-label">memories this<br>year</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="daysToBirthday">133</div>
+                            <div class="stat-label">days to<br>birthday</div>
+                        </div>
+                    </div>
+                    
+                    <div class="scroll-hint">Scroll</div>
+                </div>
+
+                <!-- Compact shrunk content -->
+                <div class="compact-content" id="compactContent">
+                    <div class="compact-photo"></div>
+                    <div class="compact-text">
+                        <span class="stat-number" id="compactMemoryCount">0</span>
+                        <span class="stat-label">memories • Emma, 8 years old</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Section -->
+        <div class="content-section" id="contentSection">
+            <div class="timeline-container">
+                <div class="timeline-header">
+                    <div class="timeline-title">Emma's Timeline</div>
+                    <div class="timeline-subtitle">Recent memories and moments</div>
+                </div>
+                
+                <div class="timeline" id="timeline">
+                    <div class="loading" id="loadingIndicator">Loading memories</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Swipe indicator -->
+    <div class="swipe-indicator" id="swipeIndicator">Swipe detected!</div>
+
+    <!-- Floating Add Button -->
+    <button class="floating-add-btn" id="addBtn">+</button>
+
+    <!-- Memory Creation Modal -->
+    <div class="memory-modal" id="memoryModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Add New Memory</div>
+                <button class="close-btn" id="closeModal">&times;</button>
+            </div>
+            
+            <form id="memoryForm">
+                <div class="memory-type-selector">
+                    <div class="type-option message active" data-type="message">
+                        <span class="type-icon">💬</span>
+                        <div class="type-label">Message</div>
+                    </div>
+                    <div class="type-option audio" data-type="audio">
+                        <span class="type-icon">🎵</span>
+                        <div class="type-label">Audio</div>
+                    </div>
+                    <div class="type-option picture" data-type="picture">
+                        <span class="type-icon">📸</span>
+                        <div class="type-label">Picture</div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="memoryDate">Date</label>
+                    <input 
+                        type="date" 
+                        class="form-input" 
+                        id="memoryDate" 
+                        required
+                    />
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="memoryText">Memory Description</label>
+                    <textarea 
+                        class="form-input form-textarea" 
+                        id="memoryText" 
+                        placeholder="Describe this special moment..."
+                        required
+                    ></textarea>
+                </div>
+
+                <div class="audio-controls" id="audioControls">
+                    <button type="button" class="record-btn" id="recordBtn">🎤 Start Recording</button>
+                    <div id="recordingStatus" style="margin-top: 8px; font-size: 0.8rem; color: #92400e;"></div>
+                </div>
+
+                <div class="picture-controls" id="pictureControls">
+                    <button type="button" class="picture-btn" id="cameraBtn">📷 Take Photo</button>
+                    <button type="button" class="picture-btn" id="galleryBtn">🖼️ From Gallery</button>
+                    <div id="pictureStatus" style="margin-top: 8px; font-size: 0.8rem; color: #7c3aed;"></div>
+                </div>
+
+                <button type="submit" class="save-memory-btn">Save Memory</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scroll content area (needed for scrolling behavior) -->
+    <div class="scroll-extender">
+        <div style="padding: 2rem; text-align: center; color: #9ca3af;">
+            <div style="height: 100vh; display: flex; align-items: center; justify-content: center;">
+                <div style="text-align: center; opacity: 0.5;">
+                    <!-- <div style="font-size: 3rem; margin-bottom: 1rem;">📱</div>
+                    <p>Emma's Memory App</p> -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Dexie Database
+        const db = new Dexie('EmmaMemoriesDB');
+
+        // Define schema
+        db.version(1).stores({
+            memories: '++id, type, text, date, timestamp, audioData, pictureData, duration'
+        });
+
+        // Global variables
+        let debugClicks = 0;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const headerSection = document.getElementById('headerSection');
+            const contentSection = document.getElementById('contentSection');
+            const initialContent = document.getElementById('initialContent');
+            const compactContent = document.getElementById('compactContent');
+
+            const rootStyles = getComputedStyle(document.documentElement);
+            const INITIAL_HEADER_VH = parseFloat(rootStyles.getPropertyValue('--initial-header-vh').trim());
+            const MIN_HEADER_PX = parseFloat(rootStyles.getPropertyValue('--min-header-px').trim());
+            const SCROLL_DISTANCE_FOR_FULL_EFFECT = parseFloat(rootStyles.getPropertyValue('--scroll-distance-for-full-effect').trim());
+
+            // Initialize the app
+            await initializeApp();
+
+            // Set default date to today
+            document.getElementById('memoryDate').valueAsDate = new Date();
+
+            function updateHeights() {
+                const scrollY = window.scrollY;
+                const viewportHeight = window.innerHeight;
+
+                const initialHeaderPx = viewportHeight * (INITIAL_HEADER_VH / 100);
+                const minHeaderPx = MIN_HEADER_PX; // Fixed 80px
+                const totalShrinkableHeightPx = initialHeaderPx - minHeaderPx;
+                
+                let shrinkProgress = 0;
+                if (SCROLL_DISTANCE_FOR_FULL_EFFECT > 0) {
+                    shrinkProgress = Math.min(scrollY / SCROLL_DISTANCE_FOR_FULL_EFFECT, 1);
+                } else if (scrollY > 0) {
+                    shrinkProgress = 1;
+                }
+                
+                // Only modify heights when scrolling
+                if (scrollY > 0) {
+                    const currentShrinkAmountPx = totalShrinkableHeightPx * shrinkProgress;
+                    let currentHeaderPx = initialHeaderPx - currentShrinkAmountPx;
+                    currentHeaderPx = Math.max(minHeaderPx, Math.min(currentHeaderPx, initialHeaderPx));
+
+                    headerSection.style.height = `${currentHeaderPx}px`;
+                    
+                    let contentHeight = viewportHeight - currentHeaderPx;
+                    if (contentHeight < 0) contentHeight = 0;
+                    
+                    contentSection.style.height = `${contentHeight}px`;
+                    contentSection.style.maxHeight = `${contentHeight}px`;
+                    contentSection.style.overflow = 'auto';
+                } else {
+                    // Reset to CSS defaults when at top - let CSS handle initial state
+                    headerSection.style.height = '';
+                    contentSection.style.height = '';
+                    contentSection.style.maxHeight = '';
+                    contentSection.style.overflow = '';
+                }
+
+                // Animation logic using transforms
+                
+                // Initial Content - fade out and scale down
+                if (shrinkProgress < 1) {
+                    initialContent.style.display = 'block';
+                    if (shrinkProgress > 0) {
+                        initialContent.style.transform = `translateY(${-shrinkProgress * 50}px) scale(${1 - shrinkProgress * 0.3})`;
+                        initialContent.style.opacity = 1 - shrinkProgress;
+                    } else {
+                        // Reset transforms when at top
+                        initialContent.style.transform = '';
+                        initialContent.style.opacity = '';
+                    }
+                } else {
+                    initialContent.style.display = 'none';
+                }
+
+                // Compact Content - scale in
+                if (shrinkProgress > 0) {
+                    compactContent.style.display = 'flex';
+                    compactContent.style.transform = `scale(${shrinkProgress})`;
+                    compactContent.style.opacity = shrinkProgress;
+                    compactContent.style.pointerEvents = shrinkProgress === 1 ? 'auto' : 'none';
+                } else {
+                    compactContent.style.display = 'none';
+                }
+            }
+
+            // Touch and swipe detection
+            let touchStartY = 0;
+            let touchStartX = 0;
+            let touchStartTime = 0;
+            const swipeIndicator = document.getElementById('swipeIndicator');
+
+            function handleTouchStart(e) {
+                const touch = e.touches[0];
+                touchStartY = touch.clientY;
+                touchStartX = touch.clientX;
+                touchStartTime = Date.now();
+            }
+
+            function handleTouchEnd(e) {
+                if (!e.changedTouches[0]) return;
+
+                const touch = e.changedTouches[0];
+                const deltaY = touch.clientY - touchStartY;
+                const deltaX = touch.clientX - touchStartX;
+                const deltaTime = Date.now() - touchStartTime;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const velocity = distance / deltaTime;
+
+                // Detect swipe
+                if (distance > 50 && deltaTime < 300 && velocity > 0.3) {
+                    const angle = Math.atan2(Math.abs(deltaY), Math.abs(deltaX)) * 180 / Math.PI;
+                    
+                    let swipeDirection = '';
+                    if (angle < 45) {
+                        swipeDirection = deltaX > 0 ? 'right' : 'left';
+                    } else {
+                        swipeDirection = deltaY > 0 ? 'down' : 'up';
+                    }
+
+                    // Show swipe indicator
+                    swipeIndicator.textContent = `Swiped ${swipeDirection}!`;
+                    swipeIndicator.classList.add('show');
+                    
+                    setTimeout(() => {
+                        swipeIndicator.classList.remove('show');
+                    }, 1500);
+
+                    // Handle swipe actions
+                    handleSwipe(swipeDirection);
+                }
+            }
+
+            function handleSwipe(direction) {
+                const addBtn = document.getElementById('addBtn');
+                
+                switch(direction) {
+                    case 'up':
+                        window.scrollTo({
+                            top: SCROLL_DISTANCE_FOR_FULL_EFFECT + 100,
+                            behavior: 'smooth'
+                        });
+                        break;
+                    case 'down':
+                        if (window.pageYOffset > 50) {
+                            window.scrollTo({
+                                top: 0,
+                                behavior: 'smooth'
+                            });
+                        }
+                        break;
+                    case 'left':
+                        // Show floating button
+                        addBtn.style.opacity = '1';
+                        addBtn.style.transform = addBtn.style.transform.replace('scale(0.95)', 'scale(1.1)');
+                        break;
+                    case 'right':
+                        // Hide floating button
+                        addBtn.style.opacity = '0.3';
+                        setTimeout(() => {
+                            addBtn.style.opacity = '1';
+                        }, 1000);
+                        break;
+                }
+            }
+
+            // Event listeners
+            window.addEventListener('scroll', updateHeights);
+            window.addEventListener('resize', updateHeights);
+
+            // NO initial call to updateHeights - let CSS handle initial state completely
+            // Only run if user has already scrolled when page loads (e.g., refresh mid-scroll)
+            if (window.scrollY > 10) {
+                updateHeights();
+            }
+
+            // Touch event listeners
+            document.addEventListener('touchstart', handleTouchStart, { passive: true });
+            document.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+            // Toggle functionality
+            document.getElementById('toggleMode').addEventListener('click', function() {
+                this.classList.toggle('active');
+                // You can add mode switching logic here
+            });
+
+            // Add debug and clear database functionality
+            document.getElementById('toggleTest').addEventListener('click', async function() {
+                debugClicks++;
+                this.classList.toggle('active');
+                
+                try {
+                    if (debugClicks === 1) {
+                        await debugDatabase();
+                        this.textContent = 'Clear';
+                    } else if (debugClicks === 2) {
+                        if (confirm('Clear all memories from database? This cannot be undone.')) {
+                            await clearDatabase();
+                            this.textContent = 'Cleared';
+                            await loadMemories(); // Refresh the timeline
+                        } else {
+                            this.textContent = 'Debug';
+                        }
+                    } else {
+                        // Reset
+                        debugClicks = 0;
+                        this.textContent = 'Debug';
+                        this.classList.remove('active');
+                    }
+                } catch (error) {
+                    console.error('Debug button error:', error);
+                    alert('Debug error: ' + error.message);
+                }
+            });
+
+            // Floating button functionality
+            document.getElementById('addBtn').addEventListener('click', () => {
+                document.getElementById('memoryModal').classList.add('active');
+            });
+
+            // Modal functionality
+            document.getElementById('closeModal').addEventListener('click', () => {
+                document.getElementById('memoryModal').classList.remove('active');
+            });
+
+            document.getElementById('memoryModal').addEventListener('click', (e) => {
+                if (e.target === e.currentTarget) {
+                    document.getElementById('memoryModal').classList.remove('active');
+                }
+            });
+
+            // Memory creation functionality
+            setupMemoryCreation();
+
+            // Timeline interactions for existing items
+            setupTimelineInteractions();
+        });
+
+        // Database functions
+        async function initializeApp() {
+            try {
+                await loadMemories();
+                console.log('App initialized successfully');
+            } catch (error) {
+                console.error('Failed to initialize app:', error);
+                document.getElementById('loadingIndicator').textContent = 'Failed to load memories';
+            }
+        }
+
+        async function loadMemories() {
+            try {
+                const memories = await db.memories.orderBy('date').reverse().toArray();
+                console.log('Loaded memories:', memories);
+                
+                displayMemories(memories);
+                updateMemoryStats(memories.length);
+            } catch (error) {
+                console.error('Error loading memories:', error);
+                throw error;
+            }
+        }
+
+        async function saveMemory(memoryData) {
+            try {
+                const id = await db.memories.add({
+                    ...memoryData,
+                    timestamp: new Date().toISOString()
+                });
+                console.log('Memory saved with ID:', id);
+                return id;
+            } catch (error) {
+                console.error('Error saving memory:', error);
+                throw error;
+            }
+        }
+
+        async function debugDatabase() {
+            try {
+                const count = await db.memories.count();
+                const memories = await db.memories.orderBy('date').reverse().toArray();
+                
+                console.log('=== DATABASE DEBUG INFO ===');
+                console.log('Total memories:', count);
+                console.log('All memories:', memories);
+                console.log('Database tables:', db.tables.map(t => t.name));
+                
+                alert(`Database Info:\nTotal memories: ${count}\nSee console for detailed info`);
+            } catch (error) {
+                console.error('Error debugging database:', error);
+                throw error;
+            }
+        }
+
+        async function clearDatabase() {
+            try {
+                await db.memories.clear();
+                console.log('Database cleared');
+            } catch (error) {
+                console.error('Error clearing database:', error);
+                throw error;
+            }
+        }
+
+        function displayMemories(memories) {
+            const timeline = document.getElementById('timeline');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            
+            // Remove loading indicator
+            if (loadingIndicator) {
+                loadingIndicator.remove();
+            }
+
+            // Clear existing content
+            timeline.innerHTML = '';
+
+            if (memories.length === 0) {
+                timeline.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; color: #6b7280;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📝</div>
+                        <h3 style="color: #374151; margin-bottom: 1rem;">No memories yet</h3>
+                        <p>Start by adding your first memory using the + button!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Group memories by date
+            const groupedMemories = groupMemoriesByDate(memories);
+
+            // Create timeline sections
+            for (const [dateStr, dayMemories] of Object.entries(groupedMemories)) {
+                const dateSection = document.createElement('div');
+                dateSection.className = 'date-section';
+
+                const dateHeader = document.createElement('div');
+                dateHeader.className = 'date-header';
+                dateHeader.textContent = formatDateHeader(dateStr);
+
+                const dateMemories = document.createElement('div');
+                dateMemories.className = 'date-memories';
+
+                dayMemories.forEach(memory => {
+                    const memoryElement = createMemoryElement(memory);
+                    dateMemories.appendChild(memoryElement);
+                });
+
+                dateSection.appendChild(dateHeader);
+                dateSection.appendChild(dateMemories);
+                timeline.appendChild(dateSection);
+            }
+
+            // Setup interactions for all items
+            setupTimelineInteractions();
+        }
+
+        function groupMemoriesByDate(memories) {
+            const groups = {};
+            
+            memories.forEach(memory => {
+                const date = new Date(memory.date);
+                const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+                
+                if (!groups[dateStr]) {
+                    groups[dateStr] = [];
+                }
+                groups[dateStr].push(memory);
+            });
+
+            return groups;
+        }
+
+        function formatDateHeader(dateStr) {
+            const date = new Date(dateStr);
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            if (dateStr === today.toISOString().split('T')[0]) {
+                return 'Today';
+            } else if (dateStr === yesterday.toISOString().split('T')[0]) {
+                return 'Yesterday';
+            } else {
+                return date.toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                });
+            }
+        }
+
+        function createMemoryElement(memory) {
+            const memoryDate = new Date(memory.date);
+            const timeString = memoryDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const newItem = document.createElement('div');
+            newItem.className = `timeline-item ${memory.type}`;
+            newItem.dataset.memoryId = memory.id;
+            
+            let content = '';
+            let icon = '';
+            let typeLabel = '';
+
+            switch(memory.type) {
+                case 'message':
+                    icon = '💬';
+                    typeLabel = 'Message';
+                    content = `<div class="message-text">${memory.text}</div>`;
+                    break;
+                case 'audio':
+                    icon = '🎵';
+                    typeLabel = 'Audio Recording';
+                    content = `
+                        <div class="message-text">${memory.text}</div>
+                        <div class="audio-player">
+                            <button class="audio-button">▶</button>
+                            <div class="audio-info">
+                                <div class="audio-duration">${memory.duration || '0:' + Math.floor(Math.random() * 59).toString().padStart(2, '0')}</div>
+                                <div class="audio-waveform"></div>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                case 'picture':
+                    icon = '📸';
+                    typeLabel = 'Picture';
+                    content = `
+                        <div class="message-text">${memory.text}</div>
+                        <div class="picture-container">
+                            <div class="picture-placeholder">
+                                📷 Photo from ${memoryDate.toLocaleDateString()}<br>
+                                <small>Tap to view full image</small>
+                            </div>
+                        </div>
+                    `;
+                    break;
+            }
+
+            newItem.innerHTML = `
+                <div class="item-header">
+                    <div class="item-type ${memory.type}">
+                        <span class="item-icon">${icon}</span>
+                        ${typeLabel}
+                    </div>
+                    <div class="item-time">${timeString}</div>
+                </div>
+                <div class="item-content">
+                    ${content}
+                </div>
+            `;
+
+            return newItem;
+        }
+
+        function updateMemoryStats(count) {
+            document.getElementById('memoryCount').textContent = count;
+            document.getElementById('compactMemoryCount').textContent = count;
+        }
+
+        function setupMemoryCreation() {
+            const typeOptions = document.querySelectorAll('.type-option');
+            const audioControls = document.getElementById('audioControls');
+            const pictureControls = document.getElementById('pictureControls');
+            const memoryForm = document.getElementById('memoryForm');
+            let selectedType = 'message';
+            let isRecording = false;
+            let hasAudio = false;
+            let hasPicture = false;
+            let recordingDuration = 0;
+
+            // Type selection
+            typeOptions.forEach(option => {
+                option.addEventListener('click', () => {
+                    typeOptions.forEach(opt => opt.classList.remove('active'));
+                    option.classList.add('active');
+                    selectedType = option.dataset.type;
+
+                    // Show/hide relevant controls
+                    audioControls.classList.toggle('active', selectedType === 'audio');
+                    pictureControls.classList.toggle('active', selectedType === 'picture');
+                });
+            });
+
+            // Audio recording
+            const recordBtn = document.getElementById('recordBtn');
+            const recordingStatus = document.getElementById('recordingStatus');
+
+            recordBtn.addEventListener('click', () => {
+                if (!isRecording) {
+                    // Start recording
+                    isRecording = true;
+                    hasAudio = false;
+                    recordingDuration = 0;
+                    recordBtn.textContent = '⏹️ Stop Recording';
+                    recordBtn.classList.add('recording');
+                    recordingStatus.textContent = 'Recording... 0:00';
+
+                    // Simulate recording progress
+                    let seconds = 0;
+                    const recordingInterval = setInterval(() => {
+                        seconds++;
+                        recordingDuration = seconds;
+                        const mins = Math.floor(seconds / 60);
+                        const secs = seconds % 60;
+                        recordingStatus.textContent = `Recording... ${mins}:${secs.toString().padStart(2, '0')}`;
+                    }, 1000);
+
+                    // Auto-stop after 30 seconds or when clicked again
+                    setTimeout(() => {
+                        if (isRecording) {
+                            stopRecording();
+                        }
+                    }, 30000);
+
+                    recordBtn.stopRecording = () => {
+                        clearInterval(recordingInterval);
+                        isRecording = false;
+                        hasAudio = true;
+                        recordBtn.textContent = '🎤 Record Again';
+                        recordBtn.classList.remove('recording');
+                        const mins = Math.floor(recordingDuration / 60);
+                        const secs = recordingDuration % 60;
+                        recordingStatus.textContent = `Recording saved! (${mins}:${secs.toString().padStart(2, '0')})`;
+                    };
+                } else {
+                    // Stop recording
+                    recordBtn.stopRecording();
+                }
+            });
+
+            function stopRecording() {
+                if (recordBtn.stopRecording) {
+                    recordBtn.stopRecording();
+                }
+            }
+
+            // Picture handling
+            const cameraBtn = document.getElementById('cameraBtn');
+            const galleryBtn = document.getElementById('galleryBtn');
+            const pictureStatus = document.getElementById('pictureStatus');
+
+            cameraBtn.addEventListener('click', () => {
+                // Simulate camera capture
+                pictureStatus.textContent = 'Taking photo...';
+                setTimeout(() => {
+                    hasPicture = true;
+                    pictureStatus.textContent = '📷 Photo captured!';
+                }, 1500);
+            });
+
+            galleryBtn.addEventListener('click', () => {
+                // Simulate gallery selection
+                pictureStatus.textContent = 'Opening gallery...';
+                setTimeout(() => {
+                    hasPicture = true;
+                    pictureStatus.textContent = '🖼️ Photo selected from gallery!';
+                }, 1000);
+            });
+
+            // Form submission
+            memoryForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const text = document.getElementById('memoryText').value;
+                const dateInput = document.getElementById('memoryDate').value;
+                
+                if (!text.trim()) {
+                    alert('Please add a description for your memory!');
+                    return;
+                }
+
+                if (!dateInput) {
+                    alert('Please select a date for your memory!');
+                    return;
+                }
+
+                // Validate type-specific requirements
+                if (selectedType === 'audio' && !hasAudio) {
+                    alert('Please record an audio clip for this memory!');
+                    return;
+                }
+
+                if (selectedType === 'picture' && !hasPicture) {
+                    alert('Please add a picture for this memory!');
+                    return;
+                }
+
+                try {
+                    // Prepare memory data
+                    const memoryData = {
+                        type: selectedType,
+                        text: text.trim(),
+                        date: dateInput, // Use the selected date
+                        audioData: selectedType === 'audio' ? 'simulated_audio_data' : null,
+                        pictureData: selectedType === 'picture' ? 'simulated_picture_data' : null,
+                        duration: selectedType === 'audio' ? `${Math.floor(recordingDuration / 60)}:${(recordingDuration % 60).toString().padStart(2, '0')}` : null
+                    };
+
+                    // Save to database
+                    const id = await saveMemory(memoryData);
+                    console.log('Memory saved successfully with ID:', id);
+
+                    // Reload memories to refresh the timeline
+                    await loadMemories();
+
+                    // Reset form and close modal
+                    resetForm();
+                    document.getElementById('memoryModal').classList.remove('active');
+
+                } catch (error) {
+                    console.error('Error saving memory:', error);
+                    alert('Failed to save memory. Please try again.');
+                }
+            });
+
+            function resetForm() {
+                memoryForm.reset();
+                typeOptions.forEach(opt => opt.classList.remove('active'));
+                typeOptions[0].classList.add('active'); // Default to message
+                selectedType = 'message';
+                audioControls.classList.remove('active');
+                pictureControls.classList.remove('active');
+                isRecording = false;
+                hasAudio = false;
+                hasPicture = false;
+                recordingDuration = 0;
+                recordingStatus.textContent = '';
+                pictureStatus.textContent = '';
+                recordBtn.textContent = '🎤 Start Recording';
+                recordBtn.classList.remove('recording');
+                
+                // Reset date to today
+                document.getElementById('memoryDate').valueAsDate = new Date();
+            }
+        }
+
+        function setupTimelineInteractions() {
+            // Audio player interactions
+            document.querySelectorAll('.audio-button').forEach(button => {
+                button.addEventListener('click', function() {
+                    const isPlaying = this.textContent === '⏸';
+                    
+                    if (isPlaying) {
+                        this.textContent = '▶';
+                        this.style.background = '#6b7280';
+                    } else {
+                        // Stop all other audio players
+                        document.querySelectorAll('.audio-button').forEach(btn => {
+                            btn.textContent = '▶';
+                            btn.style.background = '#6b7280';
+                        });
+                        
+                        // Start this one
+                        this.textContent = '⏸';
+                        this.style.background = '#dc2626';
+                        
+                        // Simulate playback completion
+                        const durationText = this.nextElementSibling.querySelector('.audio-duration').textContent;
+                        const [mins, secs] = durationText.split(':').map(n => parseInt(n));
+                        const durationMs = (mins * 60 + secs) * 1000;
+                        
+                        setTimeout(() => {
+                            this.textContent = '▶';
+                            this.style.background = '#6b7280';
+                        }, Math.min(durationMs, 5000)); // Max 5 seconds for demo
+                    }
+                });
+            });
+
+            // Picture interactions
+            document.querySelectorAll('.picture-container').forEach(container => {
+                container.addEventListener('click', function() {
+                    const placeholder = this.querySelector('.picture-placeholder');
+                    if (placeholder) {
+                        // Simulate image loading/viewing
+                        this.style.transform = 'scale(1.05)';
+                        placeholder.innerHTML = '🖼️ Loading image...<br><small>Tap again to close</small>';
+                        
+                        setTimeout(() => {
+                            this.style.transform = '';
+                            placeholder.innerHTML = '🖼️ Image viewed<br><small>Tap to view again</small>';
+                        }, 1500);
+                    }
+                });
+            });
+
+            // Timeline item interactions
+            document.querySelectorAll('.timeline-item').forEach(item => {
+                item.addEventListener('click', function(e) {
+                    // Don't trigger if clicking on interactive elements
+                    if (e.target.closest('.audio-button') || e.target.closest('.picture-container')) {
+                        return;
+                    }
+                    
+                    // Add a subtle highlight effect
+                    this.style.transform = 'scale(1.02)';
+                    this.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                    
+                    setTimeout(() => {
+                        this.style.transform = '';
+                        this.style.boxShadow = '';
+                    }, 200);
+                });
+            });
+        }
+    </script>
+</body>
+</html>

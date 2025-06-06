@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family Memory Timeline</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.4/dexie.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #B8BCC4;
+            --bg-secondary: #E8E8E8;
+            --text-primary: #FFFFFF;
+            --text-secondary: #666666;
+            --memory-active: #9E9E9E;
+            
+            /* Dynamic height controls */
+            --initial-header-vh: 100;
+            --min-header-px: 80;
+            --scroll-distance-for-full-effect: 500;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f0f0f0;
+            margin: 0;
+            color: #333;
+        }
+
+        /* Main container - back to original structure */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            left: 0;
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            overflow: hidden;
+        }
+
+        /* Header Section - Shrinks (back to original) */
+        .header-section {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            min-height: 80px;
+            overflow: hidden;
+            transition: height 0.05s linear, background 0.3s ease;
+            will-change: height;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .header-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px 40px 20px;
+            position: relative;
+            width: 100%;
+        }
+
+        /* Header controls */
+        .header-controls {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .toggle-btn {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+            touch-action: manipulation;
+        }
+
+        .toggle-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .toggle-btn.active {
+            background: rgba(255,255,255,0.9);
+            color: #333;
+        }
+
+        /* Kid indicators - simple dots */
+        .kid-indicators {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            display: flex;
+            gap: 6px;
+            z-index: 10;
+        }
+
+        .kid-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.4);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .kid-dot.active {
+            background: white;
+            transform: scale(1.4);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        /* Initial content (visible when expanded) */
+        .initial-content {
+            display: block;
+            text-align: center;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .kid-photo {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .kid-name {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .kid-age {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 40px;
+            transition: all 0.3s ease;
+        }
+
+        .stats {
+            display: flex;
+            gap: 60px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 5rem;
+            font-weight: 200;
+            line-height: 0.8;
+            margin-bottom: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            opacity: 0.9;
+            line-height: 1.4;
+        }
+
+        .scroll-hint {
+            margin-top: 40px;
+            opacity: 0.8;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .scroll-hint::after {
+            content: '↓';
+            display: block;
+            text-align: center;
+            margin-top: 8px;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-8px); }
+            60% { transform: translateY(-4px); }
+        }
+
+        /* Compact content (visible when shrunk) */
+        .compact-content {
+            display: none;
+            align-items: center;
+            width: calc(100% - 3rem);
+            position: absolute;
+            top: 50%;
+            left: 1.5rem;
+            transform: translateY(-50%);
+            pointer-events: none;
+            transform-origin: left center;
+        }
+
+        .compact-photo {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            margin-right: 12px;
+            transition: all 0.3s ease;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .compact-text {
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .compact-text .stat-number {
+            display: inline;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-right: 0.25rem;
+        }
+
+        .compact-text .stat-label {
+            display: inline;
+            font-size: 0.9rem;
+        }
+
+        /* Content Section - Takes remaining space (back to original) */
+        .content-section {
+            background: var(--bg-secondary);
+            padding: 0;
+            height: 0;
+            max-height: 0;
+            overflow: hidden;
+            transition: height 0.05s linear, max-height 0.05s linear;
+            will-change: height;
+            flex-shrink: 0;
+        }
+
+        .timeline-container {
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: var(--bg-secondary);
+        }
+
+        .timeline-header {
+            text-align: center;
+            padding: 20px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid #e5e7eb;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+
+        .timeline-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .timeline-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .timeline {
+            position: relative;
+        }
+
+        /* Simple memory display */
+        .memory-item {
+            padding: 20px;
+            background: white;
+            margin: 0 20px 1px 20px;
+            border-radius: 8px;
+            transition: transform 0.2s ease;
+        }
+
+        .memory-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .memory-date {
+            font-size: 0.8rem;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+
+        .memory-text {
+            color: #374151;
+            line-height: 1.5;
+        }
+
+        .memory-type {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .memory-type.message {
+            background: #ecfdf5;
+            color: #10b981;
+        }
+
+        .memory-type.audio {
+            background: #fffbeb;
+            color: #f59e0b;
+        }
+
+        .memory-type.picture {
+            background: #f5f3ff;
+            color: #8b5cf6;
+        }
+
+        /* Swipe indicator */
+        .swipe-indicator {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(158, 158, 158, 0.9);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 1001;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .swipe-indicator.show {
+            opacity: 1;
+        }
+
+        /* Add memory button */
+        .add-memory-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: var(--memory-active);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 8px 25px rgba(158, 158, 158, 0.4);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            touch-action: manipulation;
+        }
+
+        .add-memory-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 35px rgba(158, 158, 158, 0.5);
+        }
+
+        /* Scroll extender to provide scroll distance */
+        .scroll-extender {
+            height: 200vh;
+            background: linear-gradient(to bottom, #e5e7eb, #f3f4f6);
+            padding: 2rem;
+            text-align: center;
+            color: #6b7280;
+        }
+
+        .scroll-extender h3 {
+            color: #374151;
+            margin-bottom: 1rem;
+        }
+
+        .scroll-extender p {
+            margin-bottom: 0.5rem;
+            opacity: 0.8;
+        }
+
+        /* Loading indicator */
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #6b7280;
+        }
+
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60% { content: '...'; }
+            80%, 100% { content: '...'; }
+        }
+
+        /* Kid switching animation */
+        .app-container.switching {
+            transform: scale(0.95);
+            opacity: 0.7;
+            transition: all 0.3s ease;
+        }
+
+        @media (max-width: 480px) {
+            .app-container {
+                max-width: none;
+            }
+
+            .stats {
+                gap: 40px;
+            }
+
+            .stat-number {
+                font-size: 4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container" id="appContainer">
+        <!-- Header Section -->
+        <div class="header-section" id="headerSection">
+            <div class="header-content">
+                <!-- Kid indicators -->
+                <div class="kid-indicators" id="kidIndicators">
+                    <!-- Dots will be generated dynamically -->
+                </div>
+
+                <div class="header-controls">
+                    <button class="toggle-btn active" id="toggleMode">Mode</button>
+                    <button class="toggle-btn" id="toggleTest">Debug</button>
+                </div>
+                
+                <!-- Initial expanded content -->
+                <div class="initial-content" id="initialContent">
+                    <div class="kid-photo" id="kidPhoto"></div>
+                    <div class="kid-name" id="kidName">Emma</div>
+                    <div class="kid-age" id="kidAge">8 years old</div>
+                    
+                    <div class="stats">
+                        <div class="stat-item">
+                            <div class="stat-number" id="memoryCount">0</div>
+                            <div class="stat-label">memories this<br>year</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="daysToBirthday">133</div>
+                            <div class="stat-label">days to<br>birthday</div>
+                        </div>
+                    </div>
+                    
+                    <div class="scroll-hint">Scroll to see memories</div>
+                </div>
+
+                <!-- Compact shrunk content -->
+                <div class="compact-content" id="compactContent">
+                    <div class="compact-photo" id="compactPhoto"></div>
+                    <div class="compact-text">
+                        <span class="stat-number" id="compactMemoryCount">0</span>
+                        <span class="stat-label" id="compactKidInfo">memories • Emma, 8 years old</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Section -->
+        <div class="content-section" id="contentSection">
+            <div class="timeline-container">
+                <div class="timeline-header">
+                    <div class="timeline-title" id="timelineTitle">Emma's Timeline</div>
+                    <div class="timeline-subtitle">Recent memories and moments</div>
+                </div>
+                
+                <div class="timeline" id="timeline">
+                    <div class="loading" id="loadingIndicator">Loading memories</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Swipe indicator -->
+    <div class="swipe-indicator" id="swipeIndicator">Swipe detected!</div>
+
+    <!-- Add Memory Button -->
+    <button class="add-memory-btn" id="addBtn">+</button>
+
+    <!-- Scroll content area (needed for scrolling behavior) -->
+    <div class="scroll-extender">
+        <div style="padding: 2rem; text-align: center; color: #9ca3af;">
+            <div style="height: 100vh; display: flex; align-items: center; justify-content: center;">
+                <div style="text-align: center; opacity: 0.5;">
+                    <div style="font-size: 2rem; margin-bottom: 1rem;">👨‍👩‍👧‍👦</div>
+                    <p>Swipe left/right to switch between kids</p>
+                    <p style="font-size: 0.8rem; margin-top: 0.5rem;">Scroll up/down to navigate timeline</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Dexie Database
+        const db = new Dexie('FamilyMemoriesDB');
+
+        // Simple schema
+        db.version(1).stores({
+            kids: '++id, name, age, birthday, color, photoUrl',
+            memories: '++id, kidId, type, text, date, timestamp'
+        });
+
+        // Global variables
+        let currentKidIndex = 0;
+        let kids = [];
+        let currentKid = null;
+        let isTransitioning = false;
+        let debugClicks = 0;
+
+        // Sample kids data
+        const sampleKids = [
+            {
+                name: 'Emma',
+                age: 8,
+                birthday: '2016-10-17',
+                color: '#B8BCC4',
+                photoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23E8E8E8"/><circle cx="70" cy="55" r="20" fill="%23B8BCC4" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%23B8BCC4" opacity="0.7"/></svg>'
+            },
+            {
+                name: 'Alex',
+                age: 5,
+                birthday: '2019-03-15',
+                color: '#A8D5BA',
+                photoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23D4F4E1"/><circle cx="70" cy="55" r="20" fill="%23A8D5BA" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%23A8D5BA" opacity="0.7"/></svg>'
+            },
+            {
+                name: 'Sophie',
+                age: 12,
+                birthday: '2012-08-22',
+                color: '#F4A4A4',
+                photoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23FDE8E8"/><circle cx="70" cy="55" r="20" fill="%23F4A4A4" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%23F4A4A4" opacity="0.7"/></svg>'
+            },
+            {
+                name: 'Max',
+                age: 3,
+                birthday: '2021-12-05',
+                color: '#9BB5E8',
+                photoUrl: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23E8F0FE"/><circle cx="70" cy="55" r="20" fill="%239BB5E8" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%239BB5E8" opacity="0.7"/></svg>'
+            }
+        ];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Initialize the app
+            await initializeApp();
+            
+            // Setup scroll handling - BACK TO ORIGINAL
+            setupScrollHandling();
+            
+            // Setup touch/swipe handling
+            setupTouchHandling();
+            
+            // Setup UI handlers
+            setupUIHandlers();
+        });
+
+        // Database and Kids Management
+        async function initializeApp() {
+            try {
+                await initializeKids();
+                await loadCurrentKidMemories();
+                updateUI();
+                console.log('App initialized successfully');
+            } catch (error) {
+                console.error('Failed to initialize app:', error);
+            }
+        }
+
+        async function initializeKids() {
+            try {
+                let existingKids = await db.kids.toArray();
+                
+                if (existingKids.length === 0) {
+                    console.log('No kids found, adding sample kids...');
+                    for (const kid of sampleKids) {
+                        await db.kids.add(kid);
+                    }
+                    existingKids = await db.kids.toArray();
+                }
+                
+                kids = existingKids.sort((a, b) => a.id - b.id);
+                currentKid = kids[currentKidIndex] || kids[0];
+                
+                console.log('Initialized kids:', kids);
+            } catch (error) {
+                console.error('Error initializing kids:', error);
+                throw error;
+            }
+        }
+
+        function updateUI() {
+            if (!currentKid) return;
+            
+            // Update theme
+            document.documentElement.style.setProperty('--bg-primary', currentKid.color);
+            document.getElementById('headerSection').style.background = currentKid.color;
+            
+            // Update content
+            document.getElementById('kidPhoto').style.backgroundImage = `url('${currentKid.photoUrl}')`;
+            document.getElementById('compactPhoto').style.backgroundImage = `url('${currentKid.photoUrl}')`;
+            document.getElementById('kidName').textContent = currentKid.name;
+            document.getElementById('kidAge').textContent = `${currentKid.age} years old`;
+            document.getElementById('compactKidInfo').textContent = `memories • ${currentKid.name}, ${currentKid.age} years old`;
+            document.getElementById('timelineTitle').textContent = `${currentKid.name}'s Timeline`;
+            
+            // Update birthday countdown
+            const days = calculateDaysToBirthday(currentKid.birthday);
+            document.getElementById('daysToBirthday').textContent = days;
+            
+            // Update indicators
+            updateKidIndicators();
+        }
+
+        function calculateDaysToBirthday(birthday) {
+            const today = new Date();
+            const birthDate = new Date(birthday);
+            birthDate.setFullYear(today.getFullYear());
+            if (birthDate < today) {
+                birthDate.setFullYear(today.getFullYear() + 1);
+            }
+            return Math.ceil((birthDate - today) / (1000 * 60 * 60 * 24));
+        }
+
+        function updateKidIndicators() {
+            const indicators = document.getElementById('kidIndicators');
+            indicators.innerHTML = '';
+            
+            kids.forEach((kid, index) => {
+                const dot = document.createElement('div');
+                dot.className = `kid-dot ${index === currentKidIndex ? 'active' : ''}`;
+                dot.dataset.index = index;
+                dot.title = kid.name;
+                indicators.appendChild(dot);
+            });
+        }
+
+        async function switchToKid(direction, directIndex = null) {
+            if (isTransitioning || kids.length <= 1) return;
+            
+            isTransitioning = true;
+            const appContainer = document.getElementById('appContainer');
+            
+            try {
+                // Calculate new index
+                let newIndex = directIndex !== null ? directIndex : currentKidIndex + direction;
+                
+                // Handle wrapping
+                if (newIndex >= kids.length) newIndex = 0;
+                if (newIndex < 0) newIndex = kids.length - 1;
+                
+                if (newIndex === currentKidIndex) {
+                    isTransitioning = false;
+                    return;
+                }
+                
+                // Simple transition animation
+                appContainer.classList.add('switching');
+                
+                setTimeout(async () => {
+                    // Update current kid
+                    currentKidIndex = newIndex;
+                    currentKid = kids[currentKidIndex];
+                    
+                    // Update UI
+                    updateUI();
+                    await loadCurrentKidMemories();
+                    
+                    // Complete animation
+                    appContainer.classList.remove('switching');
+                    isTransitioning = false;
+                }, 150);
+                
+            } catch (error) {
+                console.error('Error switching kid:', error);
+                appContainer.classList.remove('switching');
+                isTransitioning = false;
+            }
+        }
+
+        async function loadCurrentKidMemories() {
+            if (!currentKid) return;
+            
+            try {
+                const memories = await db.memories
+                    .where('kidId')
+                    .equals(currentKid.id)
+                    .toArray();
+                
+                // Sort manually
+                memories.sort((a, b) => new Date(b.date) - new Date(a.date));
+                
+                console.log(`Loaded ${memories.length} memories for ${currentKid.name}`);
+                
+                displayMemories(memories);
+                updateMemoryStats(memories.length);
+            } catch (error) {
+                console.error('Error loading memories:', error);
+            }
+        }
+
+        function displayMemories(memories) {
+            const timeline = document.getElementById('timeline');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            
+            if (loadingIndicator) {
+                loadingIndicator.remove();
+            }
+
+            timeline.innerHTML = '';
+
+            if (memories.length === 0) {
+                timeline.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; color: #6b7280;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📝</div>
+                        <h3 style="color: #374151; margin-bottom: 1rem;">No memories yet for ${currentKid?.name}</h3>
+                        <p>Scroll down to see memories as you add them!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            memories.forEach(memory => {
+                const memoryElement = createMemoryElement(memory);
+                timeline.appendChild(memoryElement);
+            });
+        }
+
+        function createMemoryElement(memory) {
+            const memoryDate = new Date(memory.date);
+            const element = document.createElement('div');
+            element.className = 'memory-item';
+            
+            element.innerHTML = `
+                <div class="memory-type ${memory.type}">${memory.type}</div>
+                <div class="memory-date">${memoryDate.toLocaleDateString()}</div>
+                <div class="memory-text">${memory.text}</div>
+            `;
+            
+            return element;
+        }
+
+        function updateMemoryStats(count) {
+            document.getElementById('memoryCount').textContent = count;
+            document.getElementById('compactMemoryCount').textContent = count;
+        }
+
+        // ORIGINAL SCROLL HANDLING - RESTORED
+        function setupScrollHandling() {
+            const headerSection = document.getElementById('headerSection');
+            const contentSection = document.getElementById('contentSection');
+            const initialContent = document.getElementById('initialContent');
+            const compactContent = document.getElementById('compactContent');
+
+            const rootStyles = getComputedStyle(document.documentElement);
+            const INITIAL_HEADER_VH = parseFloat(rootStyles.getPropertyValue('--initial-header-vh').trim());
+            const MIN_HEADER_PX = parseFloat(rootStyles.getPropertyValue('--min-header-px').trim());
+            const SCROLL_DISTANCE_FOR_FULL_EFFECT = parseFloat(rootStyles.getPropertyValue('--scroll-distance-for-full-effect').trim());
+
+            function updateHeights() {
+                const scrollY = window.scrollY;
+                const viewportHeight = window.innerHeight;
+
+                const initialHeaderPx = viewportHeight * (INITIAL_HEADER_VH / 100);
+                const minHeaderPx = MIN_HEADER_PX;
+                const totalShrinkableHeightPx = initialHeaderPx - minHeaderPx;
+                
+                let shrinkProgress = 0;
+                if (SCROLL_DISTANCE_FOR_FULL_EFFECT > 0) {
+                    shrinkProgress = Math.min(scrollY / SCROLL_DISTANCE_FOR_FULL_EFFECT, 1);
+                } else if (scrollY > 0) {
+                    shrinkProgress = 1;
+                }
+                
+                if (scrollY > 0) {
+                    const currentShrinkAmountPx = totalShrinkableHeightPx * shrinkProgress;
+                    let currentHeaderPx = initialHeaderPx - currentShrinkAmountPx;
+                    currentHeaderPx = Math.max(minHeaderPx, Math.min(currentHeaderPx, initialHeaderPx));
+
+                    headerSection.style.height = `${currentHeaderPx}px`;
+                    
+                    let contentHeight = viewportHeight - currentHeaderPx;
+                    if (contentHeight < 0) contentHeight = 0;
+                    
+                    contentSection.style.height = `${contentHeight}px`;
+                    contentSection.style.maxHeight = `${contentHeight}px`;
+                    contentSection.style.overflow = 'auto';
+                } else {
+                    headerSection.style.height = '';
+                    contentSection.style.height = '';
+                    contentSection.style.maxHeight = '';
+                    contentSection.style.overflow = '';
+                }
+
+                // Initial Content animation
+                if (shrinkProgress < 1) {
+                    initialContent.style.display = 'block';
+                    if (shrinkProgress > 0) {
+                        initialContent.style.transform = `translateY(${-shrinkProgress * 50}px) scale(${1 - shrinkProgress * 0.3})`;
+                        initialContent.style.opacity = 1 - shrinkProgress;
+                    } else {
+                        initialContent.style.transform = '';
+                        initialContent.style.opacity = '';
+                    }
+                } else {
+                    initialContent.style.display = 'none';
+                }
+
+                // Compact Content animation
+                if (shrinkProgress > 0) {
+                    compactContent.style.display = 'flex';
+                    compactContent.style.transform = `scale(${shrinkProgress})`;
+                    compactContent.style.opacity = shrinkProgress;
+                    compactContent.style.pointerEvents = shrinkProgress === 1 ? 'auto' : 'none';
+                } else {
+                    compactContent.style.display = 'none';
+                }
+            }
+
+            // Event listeners
+            window.addEventListener('scroll', updateHeights);
+            window.addEventListener('resize', updateHeights);
+
+            if (window.scrollY > 10) {
+                updateHeights();
+            }
+        }
+
+        function setupTouchHandling() {
+            let touchStartY = 0;
+            let touchStartX = 0;
+            let touchStartTime = 0;
+            const swipeIndicator = document.getElementById('swipeIndicator');
+
+            function handleTouchStart(e) {
+                const touch = e.touches[0];
+                touchStartY = touch.clientY;
+                touchStartX = touch.clientX;
+                touchStartTime = Date.now();
+            }
+
+            async function handleTouchEnd(e) {
+                if (!e.changedTouches[0] || isTransitioning) return;
+
+                const touch = e.changedTouches[0];
+                const deltaY = touch.clientY - touchStartY;
+                const deltaX = touch.clientX - touchStartX;
+                const deltaTime = Date.now() - touchStartTime;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const velocity = distance / deltaTime;
+
+                if (distance > 50 && deltaTime < 300 && velocity > 0.3) {
+                    const angle = Math.atan2(Math.abs(deltaY), Math.abs(deltaX)) * 180 / Math.PI;
+                    
+                    let swipeDirection = '';
+                    if (angle < 45) {
+                        swipeDirection = deltaX > 0 ? 'right' : 'left';
+                    } else {
+                        swipeDirection = deltaY > 0 ? 'down' : 'up';
+                    }
+
+                    swipeIndicator.textContent = `Swiped ${swipeDirection}!`;
+                    swipeIndicator.classList.add('show');
+                    
+                    setTimeout(() => {
+                        swipeIndicator.classList.remove('show');
+                    }, 1500);
+
+                    await handleSwipe(swipeDirection);
+                }
+            }
+
+            async function handleSwipe(direction) {
+                const SCROLL_DISTANCE_FOR_FULL_EFFECT = 500;
+                
+                switch(direction) {
+                    case 'up':
+                        window.scrollTo({
+                            top: SCROLL_DISTANCE_FOR_FULL_EFFECT + 100,
+                            behavior: 'smooth'
+                        });
+                        break;
+                    case 'down':
+                        if (window.pageYOffset > 50) {
+                            window.scrollTo({
+                                top: 0,
+                                behavior: 'smooth'
+                            });
+                        }
+                        break;
+                    case 'left':
+                        await switchToKid(1);
+                        break;
+                    case 'right':
+                        await switchToKid(-1);
+                        break;
+                }
+            }
+
+            document.addEventListener('touchstart', handleTouchStart, { passive: true });
+            document.addEventListener('touchend', handleTouchEnd, { passive: true });
+        }
+
+        function setupUIHandlers() {
+            // Debug functionality
+            document.getElementById('toggleTest').addEventListener('click', async function() {
+                debugClicks++;
+                this.classList.toggle('active');
+                
+                try {
+                    if (debugClicks === 1) {
+                        await debugDatabase();
+                        this.textContent = 'Add Demo';
+                    } else if (debugClicks === 2) {
+                        await addSampleMemories();
+                        this.textContent = 'Clear';
+                        await loadCurrentKidMemories();
+                    } else if (debugClicks === 3) {
+                        if (confirm('Clear all memories?')) {
+                            await clearDatabase();
+                            this.textContent = 'Cleared';
+                            await loadCurrentKidMemories();
+                        }
+                    } else {
+                        debugClicks = 0;
+                        this.textContent = 'Debug';
+                        this.classList.remove('active');
+                    }
+                } catch (error) {
+                    console.error('Debug error:', error);
+                }
+            });
+
+            // Mode toggle
+            document.getElementById('toggleMode').addEventListener('click', function() {
+                this.classList.toggle('active');
+            });
+
+            // Kid indicator clicks
+            document.getElementById('kidIndicators').addEventListener('click', async (e) => {
+                if (e.target.classList.contains('kid-dot')) {
+                    const index = parseInt(e.target.dataset.index);
+                    if (index !== currentKidIndex) {
+                        await switchToKid(0, index);
+                    }
+                }
+            });
+
+            // Add button (placeholder for now)
+            document.getElementById('addBtn').addEventListener('click', () => {
+                alert(`Add memory for ${currentKid?.name || 'current kid'}`);
+            });
+        }
+
+        async function addSampleMemories() {
+            if (!currentKid) return;
+            
+            const sampleMemories = [
+                {
+                    type: 'message',
+                    text: `${currentKid.name} said something really funny today! They have such a great sense of humor.`,
+                    date: new Date(Date.now() - 86400000).toISOString().split('T')[0]
+                },
+                {
+                    type: 'picture',
+                    text: `Great day at the park with ${currentKid.name}. They loved the swings!`,
+                    date: new Date(Date.now() - 2 * 86400000).toISOString().split('T')[0]
+                },
+                {
+                    type: 'audio',
+                    text: `${currentKid.name} singing their favorite song before bedtime.`,
+                    date: new Date(Date.now() - 3 * 86400000).toISOString().split('T')[0]
+                },
+                {
+                    type: 'message',
+                    text: `Beach day with ${currentKid.name}! Built an amazing sandcastle together and collected seashells.`,
+                    date: new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]
+                }
+            ];
+            
+            for (const memory of sampleMemories) {
+                await db.memories.add({
+                    ...memory,
+                    kidId: currentKid.id,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        }
+
+        async function debugDatabase() {
+            try {
+                const kidsCount = await db.kids.count();
+                const memoriesCount = await db.memories.count();
+                
+                console.log('=== DATABASE DEBUG ===');
+                console.log('Kids:', kidsCount);
+                console.log('Memories:', memoriesCount);
+                console.log('Current:', currentKid?.name);
+                
+                alert(`Database:\nKids: ${kidsCount}\nMemories: ${memoriesCount}\nCurrent: ${currentKid?.name}`);
+            } catch (error) {
+                console.error('Debug error:', error);
+            }
+        }
+
+        async function clearDatabase() {
+            try {
+                await db.memories.clear();
+                console.log('Memories cleared');
+            } catch (error) {
+                console.error('Clear error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

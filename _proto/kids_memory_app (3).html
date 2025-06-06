@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emma's Memory Calendar</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #B8BCC4;
+            --bg-secondary: #E8E8E8;
+            --text-primary: #FFFFFF;
+            --text-secondary: #666666;
+            --memory-active: #9E9E9E;
+            --memory-pill: #9E9E9E;
+            --no-memory: #D1D5DB;
+            --today-marker: #000000;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f0f0f0;
+            padding: 10px;
+            height: 100vh;
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+        }
+
+        /* Main container - this is what scrolls */
+        .app-container {
+            width: 100%; 
+            max-width: 400px; 
+            height: 100vh;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            position: relative;
+        }
+
+        /* Header - changes size based on scroll */
+        .header {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            transition: all 0.4s ease;
+            position: relative;
+            padding: 60px 20px 40px 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .header.collapsed {
+            min-height: 80px;
+            padding: 16px 20px;
+            flex-direction: row;
+            justify-content: flex-start;
+            align-items: center;
+            text-align: left;
+        }
+
+        /* Header controls */
+        .header-controls {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .toggle-btn {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .toggle-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .toggle-btn.active {
+            background: rgba(255,255,255,0.9);
+            color: #333;
+        }
+
+        /* Kid photo */
+        .kid-photo {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23E8E8E8"/><circle cx="70" cy="55" r="20" fill="%23B8BCC4" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%23B8BCC4" opacity="0.7"/></svg>');
+            background-size: cover;
+            margin-bottom: 30px;
+            transition: all 0.4s ease;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .header.collapsed .kid-photo {
+            width: 50px;
+            height: 50px;
+            margin-bottom: 0;
+            margin-right: 15px;
+        }
+
+        /* Kid info */
+        .kid-info {
+            transition: all 0.4s ease;
+        }
+
+        .header.collapsed .kid-info {
+            display: flex;
+            align-items: center;
+        }
+
+        .kid-name {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            transition: all 0.4s ease;
+        }
+
+        .header.collapsed .kid-name {
+            font-size: 1.4rem;
+            margin-bottom: 2px;
+        }
+
+        .kid-age {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 40px;
+            transition: all 0.4s ease;
+        }
+
+        .header.collapsed .kid-age {
+            font-size: 0.8rem;
+            margin-bottom: 0;
+        }
+
+        /* Stats - only visible when expanded */
+        .stats {
+            display: flex;
+            gap: 60px;
+            transition: all 0.4s ease;
+        }
+
+        .header.collapsed .stats {
+            display: none;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 5rem;
+            font-weight: 200;
+            line-height: 0.8;
+            margin-bottom: 16px;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            opacity: 0.9;
+            line-height: 1.4;
+        }
+
+        /* Collapsed stats - only visible when collapsed */
+        .collapsed-stats {
+            display: none;
+            margin-left: auto;
+            margin-right: 20px;
+            font-size: 0.9rem;
+        }
+
+        .header.collapsed .collapsed-stats {
+            display: block;
+        }
+
+        .collapsed-stats .stat-number {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0;
+            display: inline;
+        }
+
+        /* Scroll hint */
+        .scroll-hint {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0.8;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.4s ease;
+        }
+
+        .scroll-hint::after {
+            content: '↓';
+            display: block;
+            text-align: center;
+            margin-top: 8px;
+            animation: bounce 2s infinite;
+        }
+
+        .header.collapsed .scroll-hint {
+            display: none;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-8px); }
+            60% { transform: translateY(-4px); }
+        }
+
+        /* Calendar content */
+        .calendar-content {
+            background: var(--bg-secondary);
+            padding: 20px;
+            min-height: 200vh;
+        }
+
+        .weekdays-header {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+            margin-bottom: 16px;
+            position: sticky;
+            top: 0;
+            background: var(--bg-secondary);
+            padding: 8px 0;
+            z-index: 5;
+        }
+
+        .weekday-label {
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .weekdays-header.hidden {
+            display: none;
+        }
+
+        .calendar-weeks {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .calendar-week {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+            position: relative;
+            min-height: 32px;
+            align-items: center;
+        }
+
+        .calendar-day {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.15s ease;
+            justify-self: center;
+            z-index: 2;
+        }
+
+        .calendar-day:hover {
+            transform: scale(1.1);
+        }
+
+        .calendar-day.no-memory {
+            background: var(--no-memory);
+        }
+
+        .calendar-day.has-memory {
+            background: var(--memory-active);
+        }
+
+        .calendar-day.today {
+            background: var(--today-marker);
+        }
+
+        .calendar-day.selected {
+            background: var(--memory-active);
+            transform: scale(1.2);
+        }
+
+        .day-number {
+            font-size: 0.7rem;
+            color: #333;
+            font-weight: 500;
+            pointer-events: none;
+        }
+
+        .calendar-day.has-memory .day-number,
+        .calendar-day.today .day-number,
+        .calendar-day.selected .day-number {
+            color: white;
+        }
+
+        .day-number.hidden {
+            display: none;
+        }
+
+        .memory-pill {
+            position: absolute;
+            background: var(--memory-pill);
+            height: 24px;
+            border-radius: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1;
+        }
+
+        /* Floating add button */
+        .floating-add-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: var(--memory-active);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 8px 25px rgba(158, 158, 158, 0.4);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .floating-add-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 35px rgba(158, 158, 158, 0.5);
+        }
+
+        /* Memory drawer */
+        .memory-drawer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: #fff;
+            z-index: 2000;
+            transform: translateY(100%);
+            transition: transform 0.4s ease;
+            overflow-y: auto;
+        }
+
+        .memory-drawer.active {
+            transform: translateY(0);
+        }
+
+        .drawer-header {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 20px;
+            position: sticky;
+            top: 0;
+        }
+
+        .drawer-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .drawer-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .drawer-close {
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 28px;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+
+        .drawer-close:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .drawer-content {
+            padding: 30px 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Memory modal */
+        .memory-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1500;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .memory-modal.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 400px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            transform: scale(0.8);
+            transition: transform 0.3s ease;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .memory-modal.active .modal-content {
+            transform: scale(1);
+        }
+
+        /* Form styles */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 0.95rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--memory-active);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(158, 158, 158, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
+        }
+
+        .save-memory-btn {
+            background: var(--memory-active);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+
+        .save-memory-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(158, 158, 158, 0.3);
+        }
+
+        /* Other components */
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            padding: 4px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .close-btn:hover {
+            background: #f5f5f5;
+        }
+
+        .memories-list {
+            margin-bottom: 20px;
+        }
+
+        .memory-item {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 4px solid var(--memory-active);
+        }
+
+        .memory-content {
+            color: #333;
+            line-height: 1.5;
+            margin-bottom: 8px;
+        }
+
+        .memory-meta {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 40px 20px;
+        }
+
+        /* Mobile */
+        @media (max-width: 480px) {
+            .app-container {
+                border-radius: 0;
+                max-width: none;
+            }
+            
+            .floating-add-btn {
+                bottom: 20px;
+                right: 20px;
+                width: 55px;
+                height: 55px;
+                font-size: 22px;
+            }
+
+            .stats {
+                gap: 40px;
+            }
+
+            .stat-number {
+                font-size: 4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container" id="appContainer">
+        <!-- Header -->
+        <div class="header" id="header">
+            <div class="header-controls">
+                <button class="toggle-btn active" id="toggleWeekdays">Days</button>
+                <button class="toggle-btn active" id="toggleNumbers">Nums</button>
+            </div>
+            
+            <div class="kid-info">
+                <div class="kid-photo"></div>
+                <div>
+                    <div class="kid-name">Emma</div>
+                    <div class="kid-age">8 years old</div>
+                </div>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-number" id="memoriesThisYear">16</div>
+                    <div class="stat-label">memories this<br>year</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="daysUntilBirthday">315</div>
+                    <div class="stat-label">days to<br>birthday</div>
+                </div>
+            </div>
+            
+            <div class="collapsed-stats">
+                <span class="stat-number" id="collapsedMemories">16</span>
+                <span> memories over the past 30 days</span>
+            </div>
+            
+            <div class="scroll-hint">Scroll</div>
+        </div>
+
+        <!-- Calendar Content -->
+        <div class="calendar-content">
+            <div class="weekdays-header" id="weekdaysHeader">
+                <div class="weekday-label">M</div>
+                <div class="weekday-label">T</div>
+                <div class="weekday-label">W</div>
+                <div class="weekday-label">T</div>
+                <div class="weekday-label">F</div>
+                <div class="weekday-label">S</div>
+                <div class="weekday-label">S</div>
+            </div>
+            <div class="calendar-weeks" id="calendarWeeks">
+                <!-- Calendar will be generated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Add Button -->
+    <button class="floating-add-btn" id="addMemoryBtn">+</button>
+
+    <!-- Memory Modal -->
+    <div class="memory-modal" id="memoryModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="modalTitle">Memories</div>
+                <button class="close-btn" id="closeModal">&times;</button>
+            </div>
+            <div class="memories-list" id="memoriesList"></div>
+        </div>
+    </div>
+
+    <!-- Memory Drawer -->
+    <div class="memory-drawer" id="memoryDrawer">
+        <div class="drawer-header">
+            <div class="drawer-title-row">
+                <div class="drawer-title">Add Memory</div>
+                <button class="drawer-close" id="closeDrawer">×</button>
+            </div>
+            <div>Capture a special moment</div>
+        </div>
+        
+        <div class="drawer-content">
+            <form id="memoryForm">
+                <div class="form-group">
+                    <label class="form-label" for="memoryContent">What happened?</label>
+                    <textarea 
+                        class="form-input form-textarea" 
+                        id="memoryContent" 
+                        placeholder="Tell the story of this special moment..."
+                        required
+                    ></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="memoryDate">When?</label>
+                    <input 
+                        type="date" 
+                        class="form-input" 
+                        id="memoryDate" 
+                        required
+                    />
+                </div>
+
+                <button type="submit" class="save-memory-btn">Save Memory</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        class MemoryCalendar {
+            constructor() {
+                this.memoryData = {};
+                this.selectedDate = null;
+                this.selectedDateElement = null;
+                this.showWeekdays = true;
+                this.showDayNumbers = true;
+                
+                this.initApp();
+            }
+
+            initApp() {
+                this.loadSampleData();
+                this.loadSettings();
+                this.generateCalendar();
+                this.setupScrollHandler();
+                this.attachEventListeners();
+                this.updateStats();
+                this.setTodayAsDefault();
+                this.updateDisplay();
+            }
+
+            loadSampleData() {
+                this.memoryData = {
+                    '2025-06-04': [{ content: "Emma learned to ride her bike without training wheels!", date: '2025-06-04' }],
+                    '2025-06-01': [{ content: "First piano recital - played Twinkle Twinkle Little Star perfectly!", date: '2025-06-01' }],
+                    '2025-05-28': [{ content: "Found Emma reading stories to her stuffed animals with different voices.", date: '2025-05-28' }],
+                    '2025-05-25': [{ content: "Helped bake cookies for the first time. More flour on her face than in the bowl!", date: '2025-05-25' }],
+                    '2025-05-20': [{ content: "Lost her first tooth! She wrote a note asking if the tooth fairy likes cookies too.", date: '2025-05-20' }]
+                };
+            }
+
+            setupScrollHandler() {
+                const container = document.getElementById('appContainer');
+                const header = document.getElementById('header');
+                
+                container.addEventListener('scroll', () => {
+                    const scrollTop = container.scrollTop;
+                    console.log('Scroll position:', scrollTop); // Debug
+                    
+                    if (scrollTop > 100) {
+                        header.classList.add('collapsed');
+                        console.log('Header collapsed');
+                    } else {
+                        header.classList.remove('collapsed');
+                        console.log('Header expanded');
+                    }
+                });
+            }
+
+            // Settings management
+            loadSettings() {
+                try {
+                    const saved = localStorage.getItem('calendar-settings');
+                    if (saved) {
+                        const settings = JSON.parse(saved);
+                        this.showWeekdays = settings.showWeekdays !== undefined ? settings.showWeekdays : true;
+                        this.showDayNumbers = settings.showDayNumbers !== undefined ? settings.showDayNumbers : true;
+                    }
+                } catch (error) {
+                    console.warn('Failed to load settings:', error);
+                }
+            }
+
+            saveSettings() {
+                try {
+                    const settings = {
+                        showWeekdays: this.showWeekdays,
+                        showDayNumbers: this.showDayNumbers
+                    };
+                    localStorage.setItem('calendar-settings', JSON.stringify(settings));
+                } catch (error) {
+                    console.warn('Failed to save settings:', error);
+                }
+            }
+
+            toggleWeekdays() {
+                this.showWeekdays = !this.showWeekdays;
+                const toggle = document.getElementById('toggleWeekdays');
+                toggle.classList.toggle('active', this.showWeekdays);
+                this.updateDisplay();
+                this.saveSettings();
+            }
+
+            toggleNumbers() {
+                this.showDayNumbers = !this.showDayNumbers;
+                const toggle = document.getElementById('toggleNumbers');
+                toggle.classList.toggle('active', this.showDayNumbers);
+                this.updateDisplay();
+                this.saveSettings();
+            }
+
+            updateDisplay() {
+                const weekdaysHeader = document.getElementById('weekdaysHeader');
+                weekdaysHeader.classList.toggle('hidden', !this.showWeekdays);
+                
+                const dayNumbers = document.querySelectorAll('.day-number');
+                dayNumbers.forEach(dn => {
+                    dn.classList.toggle('hidden', !this.showDayNumbers);
+                });
+            }
+
+            formatDate(date) {
+                return date.toISOString().split('T')[0];
+            }
+
+            generateCalendar() {
+                const weeksContainer = document.getElementById('calendarWeeks');
+                weeksContainer.innerHTML = '';
+                
+                const today = new Date();
+                const startWeek = new Date(today);
+                startWeek.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+                
+                for (let weekOffset = 0; weekOffset < 52; weekOffset++) {
+                    const weekStart = new Date(startWeek);
+                    weekStart.setDate(startWeek.getDate() - (weekOffset * 7));
+                    const weekElement = this.createWeekElement(weekStart, today);
+                    weeksContainer.appendChild(weekElement);
+                }
+            }
+
+            createWeekElement(weekStartDate, today) {
+                const weekElement = document.createElement('div');
+                weekElement.className = 'calendar-week';
+                const weekDays = [];
+                
+                for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+                    const dayDate = new Date(weekStartDate);
+                    dayDate.setDate(weekStartDate.getDate() + dayOffset);
+                    const dateStr = this.formatDate(dayDate);
+                    const hasMemory = !!this.memoryData[dateStr];
+                    const isToday = dayDate.toDateString() === today.toDateString();
+                    
+                    weekDays.push({ date: dayDate, dateStr, hasMemory, isToday, dayNumber: dayDate.getDate() });
+                }
+                
+                weekDays.forEach(dayData => {
+                    const dayElement = this.createDayElement(dayData);
+                    weekElement.appendChild(dayElement);
+                });
+                
+                const memoryRuns = this.findConsecutiveMemoryRuns(weekDays);
+                setTimeout(() => {
+                    memoryRuns.forEach(run => {
+                        if (weekElement.isConnected) this.createMemoryPill(weekElement, run);
+                    });
+                }, 0);
+                
+                return weekElement;
+            }
+
+            createDayElement(dayData) {
+                const dayElement = document.createElement('div');
+                dayElement.className = 'calendar-day';
+                dayElement.dataset.dateStr = dayData.dateStr;
+
+                if (dayData.isToday) {
+                    dayElement.classList.add('today');
+                } else if (dayData.hasMemory) {
+                    dayElement.classList.add('has-memory');
+                } else {
+                    dayElement.classList.add('no-memory');
+                }
+                
+                const dayNumberDiv = document.createElement('div');
+                dayNumberDiv.className = 'day-number';
+                dayNumberDiv.textContent = dayData.dayNumber;
+                dayElement.appendChild(dayNumberDiv);
+                
+                return dayElement;
+            }
+
+            findConsecutiveMemoryRuns(weekDays) {
+                const runs = [];
+                let currentRun = null;
+                
+                weekDays.forEach((day, index) => {
+                    if (day.hasMemory) {
+                        if (currentRun && currentRun.endIndex === index - 1) {
+                            currentRun.endIndex = index;
+                            currentRun.days.push(day);
+                        } else {
+                            if (currentRun) runs.push(currentRun);
+                            currentRun = { startIndex: index, endIndex: index, days: [day] };
+                        }
+                    } else {
+                        if (currentRun) runs.push(currentRun);
+                        currentRun = null;
+                    }
+                });
+                
+                if (currentRun) runs.push(currentRun);
+                return runs.filter(run => run.days.length >= 2);
+            }
+
+            createMemoryPill(weekElement, run) {
+                const pill = document.createElement('div');
+                pill.className = 'memory-pill';
+                
+                const gapPixels = 6;
+                const weekElementWidth = weekElement.offsetWidth;
+                if (weekElementWidth === 0) return;
+                
+                const col_fr_content_width = (weekElementWidth - (6 * gapPixels)) / 7;
+                if (col_fr_content_width <= 0) return;
+                
+                const firstDayCenterX = (run.startIndex * col_fr_content_width) + (run.startIndex * gapPixels) + (col_fr_content_width / 2);
+                const lastDayCenterX = (run.endIndex * col_fr_content_width) + (run.endIndex * gapPixels) + (col_fr_content_width / 2);
+                
+                pill.style.left = `${firstDayCenterX}px`;
+                const pillWidth = lastDayCenterX - firstDayCenterX;
+                pill.style.width = `${pillWidth}px`;
+                
+                if (pillWidth > 0) weekElement.appendChild(pill);
+            }
+
+            attachEventListeners() {
+                // Toggle buttons
+                document.getElementById('toggleWeekdays').addEventListener('click', () => this.toggleWeekdays());
+                document.getElementById('toggleNumbers').addEventListener('click', () => this.toggleNumbers());
+
+                // Calendar clicks
+                document.getElementById('calendarWeeks').addEventListener('click', (event) => {
+                    let targetDay = event.target;
+                    if (targetDay.classList.contains('day-number')) {
+                        targetDay = targetDay.closest('.calendar-day');
+                    }
+                    if (targetDay && targetDay.classList.contains('calendar-day') && targetDay.dataset.dateStr) {
+                        this.handleDayClick(targetDay.dataset.dateStr);
+                    }
+                });
+
+                // Drawer and modal
+                document.getElementById('addMemoryBtn').addEventListener('click', () => this.openDrawer());
+                document.getElementById('closeDrawer').addEventListener('click', () => this.closeDrawer());
+                document.getElementById('closeModal').addEventListener('click', () => this.hideModal());
+                document.getElementById('memoryForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.saveMemory();
+                });
+
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        this.closeDrawer();
+                        this.hideModal();
+                    }
+                });
+            }
+
+            handleDayClick(dateStr) {
+                if (this.selectedDateElement) {
+                    this.selectedDateElement.classList.remove('selected');
+                }
+                
+                const dayElement = document.querySelector(`[data-date-str="${dateStr}"]`);
+                if (dayElement) {
+                    dayElement.classList.add('selected');
+                    this.selectedDateElement = dayElement;
+                }
+
+                this.selectedDate = dateStr;
+                this.showMemoriesModal(dateStr);
+            }
+
+            showMemoriesModal(dateStr) {
+                const modal = document.getElementById('memoryModal');
+                const modalTitle = document.getElementById('modalTitle');
+                const memoriesList = document.getElementById('memoriesList');
+
+                modalTitle.textContent = this.formatDateForDisplay(dateStr);
+                
+                const memories = this.memoryData[dateStr] || [];
+                this.renderMemoriesList(memories);
+                
+                modal.classList.add('active');
+            }
+
+            renderMemoriesList(memories) {
+                const memoriesList = document.getElementById('memoriesList');
+
+                if (memories.length === 0) {
+                    memoriesList.innerHTML = '<div class="empty-state">No memories for this date<br><br>Tap the + button to add one!</div>';
+                    return;
+                }
+                
+                const memoriesHTML = memories.map(memory => `
+                    <div class="memory-item">
+                        <div class="memory-content">${this.escapeHtml(memory.content)}</div>
+                        <div class="memory-meta">${this.formatDateForDisplay(memory.date)}</div>
+                    </div>
+                `).join('');
+
+                memoriesList.innerHTML = memoriesHTML;
+            }
+
+            openDrawer() {
+                document.getElementById('memoryDrawer').classList.add('active');
+                setTimeout(() => document.getElementById('memoryContent').focus(), 300);
+            }
+
+            closeDrawer() {
+                document.getElementById('memoryDrawer').classList.remove('active');
+                this.clearForm();
+            }
+
+            hideModal() {
+                document.getElementById('memoryModal').classList.remove('active');
+                if (this.selectedDateElement) {
+                    this.selectedDateElement.classList.remove('selected');
+                    this.selectedDateElement = null;
+                }
+                this.selectedDate = null;
+            }
+
+            saveMemory() {
+                const content = document.getElementById('memoryContent').value.trim();
+                const date = document.getElementById('memoryDate').value;
+                
+                if (!content || !date) {
+                    alert('Please fill in all fields');
+                    return;
+                }
+
+                const memory = { content, date, createdAt: new Date().toISOString() };
+
+                if (!this.memoryData[date]) {
+                    this.memoryData[date] = [];
+                }
+                this.memoryData[date].push(memory);
+                
+                this.generateCalendar();
+                this.updateStats();
+                this.closeDrawer();
+                this.showSuccessMessage();
+            }
+
+            updateStats() {
+                const now = new Date();
+                const currentYear = now.getFullYear();
+                const past30Days = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+                
+                let memoriesThisYear = 0;
+                let memoriesPast30Days = 0;
+                
+                Object.keys(this.memoryData).forEach(dateStr => {
+                    const memoryDate = new Date(dateStr);
+                    const memoriesCount = this.memoryData[dateStr].length;
+                    
+                    if (memoryDate.getFullYear() === currentYear) {
+                        memoriesThisYear += memoriesCount;
+                    }
+                    
+                    if (memoryDate >= past30Days) {
+                        memoriesPast30Days += memoriesCount;
+                    }
+                });
+                
+                const birthday = new Date(currentYear, 9, 15);
+                if (birthday < now) {
+                    birthday.setFullYear(currentYear + 1);
+                }
+                const daysUntilBirthday = Math.ceil((birthday - now) / (1000 * 60 * 60 * 24));
+                
+                document.getElementById('memoriesThisYear').textContent = memoriesThisYear;
+                document.getElementById('daysUntilBirthday').textContent = daysUntilBirthday;
+                document.getElementById('collapsedMemories').textContent = memoriesPast30Days;
+            }
+
+            setTodayAsDefault() {
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('memoryDate').value = today;
+            }
+
+            clearForm() {
+                document.getElementById('memoryContent').value = '';
+                document.getElementById('memoryDate').value = new Date().toISOString().split('T')[0];
+            }
+
+            formatDateForDisplay(dateStr) {
+                const date = new Date(dateStr);
+                const today = new Date();
+                
+                if (date.toDateString() === today.toDateString()) {
+                    return 'Today';
+                }
+                
+                return date.toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    month: 'long', 
+                    day: 'numeric',
+                    year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
+                });
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            showSuccessMessage() {
+                const message = document.createElement('div');
+                message.style.cssText = `
+                    position: fixed; top: 20px; right: 20px; background: var(--memory-active);
+                    color: white; padding: 12px 20px; border-radius: 8px;
+                    z-index: 3000; opacity: 0; transform: translateX(100px);
+                    transition: all 0.3s ease;
+                `;
+                message.textContent = 'Memory saved! 🎉';
+                document.body.appendChild(message);
+                
+                setTimeout(() => {
+                    message.style.opacity = '1';
+                    message.style.transform = 'translateX(0)';
+                }, 100);
+                
+                setTimeout(() => {
+                    message.style.opacity = '0';
+                    message.style.transform = 'translateX(100px)';
+                    setTimeout(() => document.body.removeChild(message), 300);
+                }, 3000);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new MemoryCalendar();
+        });
+    </script>
+</body>
+</html>

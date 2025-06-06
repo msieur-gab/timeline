@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Memory Timeline - Create a digital diary of memories for your loved ones">
+    <title>Memory Timeline</title>
+    <link rel="stylesheet" href="./css/styles.css">
+</head>
+<body>
+    <!-- Fixed Navigation Bar -->
+    <nav class="app-nav" aria-label="Timeline controls">
+        <button class="toggle-btn active" 
+                id="toggleWeekdays" 
+                aria-pressed="true"
+                title="Toggle weekday labels">
+            Days
+        </button>
+        <button class="toggle-btn active" 
+                id="toggleNumbers" 
+                aria-pressed="true"
+                title="Toggle day numbers">
+            Nums
+        </button>
+        <button class="control-btn" 
+                id="settingsToggle" 
+                aria-label="Open settings"
+                title="Settings">
+            ⚙
+        </button>
+        <button class="control-btn" 
+                id="addEntryBtn" 
+                aria-label="Add new memory"
+                title="Add Memory">
+            +
+        </button>
+    </nav>
+
+    <!-- Main Application Header -->
+    <header class="app-header expanded" id="appHeader">
+        <section class="activity-summary" aria-live="polite">
+            <h1 class="entries-count" id="entriesCount">0</h1>
+            <p class="entries-subtitle">
+                <span class="expanded-text">Memories over past<br>42 days</span>
+                <span class="collapsed-text">Memories</span>
+            </p>
+        </section>
+    </header>
+
+    <!-- Main Application Content -->
+    <main class="app-main" role="main">
+        <!-- Memory Timeline Web Component -->
+        <activity-calendar 
+            aria-label="Memory timeline grid"
+            role="application">
+        </activity-calendar>
+    </main>
+
+    <!-- Web Component Modals/Panels -->
+    <entry-modal aria-labelledby="modal-title" role="dialog"></entry-modal>
+    <settings-panel hidden aria-label="Application settings"></settings-panel>
+
+    <!-- Loading indicator -->
+    <div class="loading-indicator" id="loadingIndicator" aria-hidden="true">
+        <div class="loading-spinner"></div>
+        <p>Loading your memories...</p>
+    </div>
+
+    <!-- Error message container -->
+    <div class="error-message" id="errorMessage" role="alert" aria-hidden="true">
+        <h2>Something went wrong</h2>
+        <p id="errorText"></p>
+        <button class="btn" id="retryBtn">Try Again</button>
+    </div>
+
+    <!-- Scripts - loaded as modules -->
+    <script type="module" src="js/CalendarApp.js"></script>
+    
+    <!-- Fallback for browsers without module support -->
+    <script nomodule>
+        alert('This application requires a modern browser with ES6 module support.');
+    </script>
+</body>
+</html>

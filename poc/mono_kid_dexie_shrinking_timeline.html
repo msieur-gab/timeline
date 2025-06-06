@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emma's Memory App (Window Scroll & 100vh Header)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.4/dexie.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #B8BCC4;
+            --bg-secondary: #E8E8E8;
+            --text-primary: #FFFFFF;
+            --text-secondary: #666666;
+            --memory-active: #9E9E9E;
+            
+            /* Header dimension controls */
+            --initial-header-target-height: 100vh; /* JS will set header to this initially */
+            --min-header-px: 80px;          
+            
+            /* Scroll behavior controls */
+            --scroll-distance-for-full-effect: 500; /* Pixels of WINDOW scroll for full shrink */
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f0f0f0; /* Background for the scroll-extender area */
+            color: #333;
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh; 
+            width: 100%;
+            max-width: 400px; 
+            margin: 0 auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            overflow: hidden; 
+            position: sticky;
+            top: 0;
+            left: 0; 
+        }
+
+        .header-section {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh; 
+            min-height: var(--min-header-px);    
+            flex-shrink: 0; 
+            overflow: hidden;
+            transition: height 0.1s ease-out; 
+            will-change: height;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .header-content {
+            flex-grow: 1; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px 40px 20px; 
+            position: relative;
+            width: 100%;
+        }
+
+        .header-controls {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .toggle-btn {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+            touch-action: manipulation;
+        }
+        .toggle-btn:hover { background: rgba(255,255,255,0.3); }
+        .toggle-btn.active { background: rgba(255,255,255,0.9); color: #333; }
+
+        .initial-content {
+            display: block; 
+            text-align: center;
+            transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+            will-change: opacity, transform;
+        }
+
+        .kid-photo {
+            width: 140px; 
+            height: 140px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23E8E8E8"/><circle cx="70" cy="55" r="20" fill="%23B8BCC4" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%23B8BCC4" opacity="0.7"/></svg>');
+            background-size: cover;
+            margin-bottom: 30px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .kid-name { font-size: 3rem; font-weight: 700; margin-bottom: 8px; }
+        .kid-age { font-size: 1.1rem; opacity: 0.9; margin-bottom: 40px; }
+        .stats { display: flex; gap: 60px; }
+        .stat-item { text-align: center; }
+        .stat-number { font-size: 5rem; font-weight: 200; line-height: 0.8; margin-bottom: 16px; }
+        .stat-label { font-size: 1rem; opacity: 0.9; line-height: 1.4; }
+
+        .scroll-hint { 
+            position: absolute;
+            bottom: 30px; 
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0.8;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-primary);
+            pointer-events: none; 
+        }
+        .scroll-hint::after {
+            content: '↓';
+            display: block;
+            text-align: center;
+            margin-top: 8px;
+            animation: bounce 2s infinite;
+        }
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-8px); }
+            60% { transform: translateY(-4px); }
+        }
+
+        .compact-content {
+            display: none; 
+            align-items: center;
+            width: calc(100% - 3rem);
+            position: absolute;
+            top: 50%;
+            left: 1.5rem;
+            transform: translateY(-50%) scale(0.8); 
+            pointer-events: none;
+            transform-origin: left center;
+            transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+            will-change: opacity, transform;
+            opacity: 0; 
+        }
+        .compact-photo {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: var(--bg-secondary);
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="%23E8E8E8"/><circle cx="16" cy="12" r="4" fill="%23B8BCC4" opacity="0.7"/><ellipse cx="16" cy="22" rx="6" ry="4" fill="%23B8BCC4" opacity="0.7"/></svg>');
+            background-size: cover; margin-right: 12px;
+        }
+        .compact-text { font-size: 0.9rem; }
+        .compact-text .stat-number { display: inline; font-size: 1.2rem; font-weight: 600; margin-right: 0.25rem; }
+        .compact-text .stat-label { display: inline; font-size: 0.9rem; }
+
+        .content-section {
+            background: var(--bg-secondary);
+            flex-grow: 1; 
+            overflow: hidden; 
+            position: relative; 
+        }
+
+        .timeline-container {
+            height: 100%; 
+            overflow-y: auto; 
+            overflow-x: hidden;
+            background: var(--bg-secondary);
+            -webkit-overflow-scrolling: touch; 
+        }
+
+        .timeline-header {
+            text-align: center; padding: 20px; background: var(--bg-secondary);
+            border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; z-index: 20;
+        }
+        .timeline-title { font-size: 1.2rem; font-weight: 600; color: #374151; margin-bottom: 4px; }
+        .timeline-subtitle { font-size: 0.85rem; color: var(--text-secondary); }
+
+        .timeline { position: relative; }
+        .date-section { position: relative; }
+        .date-header {
+            position: sticky; top: 81px; z-index: 15; background: var(--bg-secondary);
+            padding: 12px 20px; border-bottom: 1px solid #e5e7eb; font-weight: 600;
+            color: #374151; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+        }
+        .date-memories { background: white; }
+
+        .timeline-item{position:relative;padding:16px 20px;border-bottom:1px solid #f3f4f6;background:white;transition:background-color .2s ease}.timeline-item:hover{background:#f9fafb}.timeline-item:last-child{border-bottom:none}.timeline-item::before,.timeline::before{display:none}.item-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}.item-type{display:flex;align-items:center;gap:8px;font-size:.75rem;font-weight:500;color:#6b7280;text-transform:uppercase;letter-spacing:.5px}.item-icon{width:16px;height:16px;display:inline-block;opacity:.7}.item-time{font-size:.75rem;color:#9ca3af}.item-content{color:#374151;line-height:1.5}.message-text{font-size:.95rem}.audio-player{background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:12px;display:flex;align-items:center;gap:12px;margin-top:8px}.audio-button{width:28px;height:28px;border-radius:50%;background:#6b7280;border:none;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;transition:all .2s}.audio-button:hover{background:#4b5563}.audio-info{flex:1}.audio-duration{font-size:.8rem;color:#6b7280;font-weight:500}.audio-waveform{height:2px;background:#e5e7eb;border-radius:1px;margin-top:4px;position:relative;overflow:hidden}.audio-waveform::after{content:'';position:absolute;left:0;top:0;bottom:0;width:30%;background:#6b7280;border-radius:1px}.picture-container{margin-top:8px;border-radius:6px;border:1px solid #e5e7eb;overflow:hidden;background:#f9fafb;aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:border-color .2s}.picture-container:hover{border-color:#d1d5db}.picture-placeholder{color:#6b7280;font-size:.8rem;text-align:center}.picture-image{width:100%;height:100%;object-fit:cover}.memory-modal{position:fixed;top:0;left:0;width:100%;height:100vh;background:rgba(0,0,0,.5);z-index:2000;opacity:0;visibility:hidden;transition:all .3s ease;display:flex;align-items:center;justify-content:center}.memory-modal.active{opacity:1;visibility:visible}.modal-content{background:#fff;border-radius:16px;padding:24px;max-width:350px;width:90%;max-height:80vh;overflow-y:auto;transform:scale(.8);transition:transform .3s ease;box-shadow:0 10px 40px rgba(0,0,0,.3)}.memory-modal.active .modal-content{transform:scale(1)}.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid #eee}.modal-title{font-size:1.2rem;font-weight:600;color:#333}.close-btn{background:0 0;border:none;font-size:24px;cursor:pointer;color:#666;padding:4px;border-radius:4px;transition:background .2s;touch-action:manipulation}.close-btn:hover{background:#f5f5f5}.memory-type-selector{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}.type-option{padding:16px 12px;border:2px solid #e5e7eb;border-radius:8px;text-align:center;cursor:pointer;transition:all .2s;background:#fff}.type-option:hover{border-color:var(--memory-active)}.type-option.active{border-color:var(--memory-active);background:#f9fafb}.type-option.message.active{border-color:#10b981;background:#ecfdf5}.type-option.audio.active{border-color:#f59e0b;background:#fffbeb}.type-option.picture.active{border-color:#8b5cf6;background:#f5f3ff}.type-icon{font-size:1.5rem;margin-bottom:4px;display:block}.type-label{font-size:.75rem;font-weight:500;text-transform:uppercase;letter-spacing:.5px}.form-group{margin-bottom:16px}.form-label{display:block;margin-bottom:6px;font-weight:500;color:#374151;font-size:.9rem}.form-input{width:100%;padding:10px 12px;border:2px solid #e5e7eb;border-radius:6px;font-size:.9rem;transition:all .2s;background:#fafafa}.form-input:focus{outline:0;border-color:var(--memory-active);background:#fff;box-shadow:0 0 0 3px rgba(158,158,158,.1)}.form-textarea{resize:vertical;min-height:80px;font-family:inherit}.audio-controls{display:none;background:#fffbeb;border-radius:8px;padding:12px;margin-top:8px;text-align:center}.audio-controls.active{display:block}.record-btn{background:#f59e0b;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:.9rem;cursor:pointer;transition:all .2s}.record-btn:hover{background:#d97706}.record-btn.recording{background:#dc2626;animation:pulse 1s infinite}@keyframes pulse{0%,to{opacity:1}50%{opacity:.7}}.picture-controls{display:none;background:#f5f3ff;border-radius:8px;padding:12px;margin-top:8px;text-align:center}.picture-controls.active{display:block}.picture-btn{background:#8b5cf6;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:.9rem;cursor:pointer;transition:all .2s;margin:0 5px}.picture-btn:hover{background:#7c3aed}.save-memory-btn{background:var(--memory-active);color:#fff;border:none;padding:12px 24px;border-radius:6px;font-size:.95rem;font-weight:500;cursor:pointer;width:100%;transition:all .3s ease;touch-action:manipulation}.save-memory-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(158,158,158,.3)}.save-memory-btn:active{transform:translateY(0)}.save-memory-btn:disabled{opacity:.6;cursor:not-allowed}.timeline-container::-webkit-scrollbar{width:4px}.timeline-container::-webkit-scrollbar-track{background:0 0}.timeline-container::-webkit-scrollbar-thumb{background:var(--memory-active);border-radius:2px}.timeline-container::-webkit-scrollbar-thumb:hover{background:#6b7280}
+        
+        .floating-add-btn{position:fixed;bottom:30px;right:30px;width:60px;height:60px;background:var(--memory-active);border:none;border-radius:50%;color:#fff;font-size:24px;cursor:pointer;box-shadow:0 8px 25px rgba(158,158,158,.4);transition:all .3s ease;z-index:1000;touch-action:manipulation}
+        @media (min-width:401px){.floating-add-btn{right:calc(50vw - 200px + 400px - 60px - 20px);right:max(30px,calc(50vw - 200px + 320px))}}
+        @media (max-width:400px){.floating-add-btn{right:20px}}
+        .floating-add-btn:hover{transform:scale(1.1);box-shadow:0 12px 35px rgba(158,158,158,.5)}.floating-add-btn:active{transform:scale(.95)}
+        .loading{text-align:center;padding:2rem;color:#6b7280}.loading::after{content:'...';animation:dots 1.5s infinite}@keyframes dots{0%,20%{content:'.'}40%{content:'..'}60%{content:'...'}80%,to{content:'...'}}
+        .swipe-indicator{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(158,158,158,.9);color:#fff;padding:8px 16px;border-radius:20px;font-size:12px;z-index:1001;opacity:0;transition:opacity .3s ease;pointer-events:none}.swipe-indicator.show{opacity:1}
+        @media (max-width:480px){.stats{gap:30px}.stat-number{font-size:2.5rem}.kid-name{font-size:1.8rem}.kid-age{font-size:.9rem}.kid-photo{width:80px;height:80px;margin-bottom:10px}.date-header{top:calc(env(safe-area-inset-top,0px) + 81px)}.timeline-header{top:env(safe-area-inset-top,0px)}}
+
+        .scroll-extender {
+            height: 150vh; 
+            pointer-events: none; 
+        }
+
+    </style>
+</head>
+<body>
+    <div class="app-container" id="appContainer">
+        <div class="header-section" id="headerSection">
+            <div class="header-content">
+                <div class="header-controls">
+                    <button class="toggle-btn active" id="toggleMode">Mode</button>
+                    <button class="toggle-btn" id="toggleTest">Debug</button>
+                </div>
+                <div class="initial-content" id="initialContent">
+                    <div class="kid-photo"></div>
+                    <div class="kid-name">Emma</div>
+                    <div class="kid-age">8 years old</div>
+                    <div class="stats">
+                        <div class="stat-item">
+                            <div class="stat-number" id="memoryCount">0</div>
+                            <div class="stat-label">memories<br>this year</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="daysToBirthday">133</div>
+                            <div class="stat-label">days to<br>birthday</div>
+                        </div>
+                    </div>
+                    <div class="scroll-hint" id="scrollHint">Scroll Down</div>
+                </div>
+                <div class="compact-content" id="compactContent">
+                    <div class="compact-photo"></div>
+                    <div class="compact-text">
+                        <span class="stat-number" id="compactMemoryCount">0</span>
+                        <span class="stat-label">memories • Emma, 8 years old</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section" id="contentSection">
+            <div class="timeline-container" id="timelineContainer"> 
+                <div class="timeline-header">
+                    <div class="timeline-title">Emma's Timeline</div>
+                    <div class="timeline-subtitle">Recent memories and moments</div>
+                </div>
+                <div class="timeline" id="timeline">
+                    <div class="loading" id="loadingIndicator">Loading memories</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-extender"></div>
+
+    <div class="swipe-indicator" id="swipeIndicator">Swipe detected!</div>
+    <button class="floating-add-btn" id="addBtn">+</button>
+
+    <div class="memory-modal" id="memoryModal">
+        <div class="modal-content"><div class="modal-header"><div class="modal-title">Add New Memory</div><button class="close-btn" id="closeModal">&times;</button></div><form id="memoryForm"><div class="memory-type-selector"><div class="type-option message active" data-type="message"><span class="type-icon">💬</span><div class="type-label">Message</div></div><div class="type-option audio" data-type="audio"><span class="type-icon">🎵</span><div class="type-label">Audio</div></div><div class="type-option picture" data-type="picture"><span class="type-icon">📸</span><div class="type-label">Picture</div></div></div><div class="form-group"><label class="form-label" for="memoryDate">Date</label><input type="date" class="form-input" id="memoryDate" required /></div><div class="form-group"><label class="form-label" for="memoryText">Memory Description</label><textarea class="form-input form-textarea" id="memoryText" placeholder="Describe this special moment..." required></textarea></div><div class="audio-controls" id="audioControls"><button type="button" class="record-btn" id="recordBtn">🎤 Start Recording</button><div id="recordingStatus" style="margin-top:8px;font-size:.8rem;color:#92400e"></div></div><div class="picture-controls" id="pictureControls"><button type="button" class="picture-btn" id="cameraBtn">📷 Take Photo</button><button type="button" class="picture-btn" id="galleryBtn">🖼️ From Gallery</button><div id="pictureStatus" style="margin-top:8px;font-size:.8rem;color:#7c3aed"></div></div><button type="submit" class="save-memory-btn">Save Memory</button></form></div>
+    </div>
+
+    <script>
+        const db = new Dexie('EmmaMemoriesDB');
+        db.version(1).stores({
+            memories: '++id, type, text, date, timestamp, audioData, pictureData, duration'
+        });
+
+        let debugClicks = 0;
+        let headerUpdateTicking = false;
+        const dom = {};
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            dom.root = document.documentElement;
+            dom.appContainer = document.getElementById('appContainer'); 
+            dom.headerSection = document.getElementById('headerSection');
+            dom.initialContent = document.getElementById('initialContent');
+            dom.compactContent = document.getElementById('compactContent');
+            dom.contentSection = document.getElementById('contentSection');
+            dom.timelineContainer = document.getElementById('timelineContainer');
+            dom.scrollHint = document.getElementById('scrollHint'); 
+            
+            await initializeApp();
+            document.getElementById('memoryDate').valueAsDate = new Date();
+
+            window.addEventListener('scroll', scheduleHeaderUpdate);
+            window.addEventListener('resize', scheduleHeaderUpdate);
+            
+            performHeaderUpdate(); 
+
+            let touchStartY = 0, touchStartX = 0, touchStartTime = 0;
+            const swipeIndicator = document.getElementById('swipeIndicator');
+            // NOTE: Full touch handlers were here in the provided snippet, 
+            // but they are collapsed for brevity in this thought process.
+            // The important part for this bug is the form submission logic.
+            document.addEventListener('touchstart', (e) => {
+                const touch = e.touches[0];
+                touchStartY = touch.clientY;
+                touchStartX = touch.clientX;
+                touchStartTime = Date.now();
+            }, { passive: true });
+
+            document.addEventListener('touchend', (e) => {
+                if (!e.changedTouches[0]) return;
+                const touch = e.changedTouches[0];
+                const deltaY = touch.clientY - touchStartY;
+                const deltaX = touch.clientX - touchStartX;
+                const deltaTime = Date.now() - touchStartTime;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+                if (distance > 50 && deltaTime < 300) { 
+                    const swipeDirection = Math.abs(deltaX) > Math.abs(deltaY) ? (deltaX > 0 ? 'right' : 'left') : (deltaY > 0 ? 'down' : 'up');
+                    if (swipeIndicator) {
+                        swipeIndicator.textContent = `Swiped ${swipeDirection}!`;
+                        swipeIndicator.classList.add('show');
+                        setTimeout(() => swipeIndicator.classList.remove('show'), 1500);
+                    }
+                    handleSwipe(swipeDirection); 
+                }
+            }, { passive: true });
+            
+            document.getElementById('toggleMode').addEventListener('click', function() { this.classList.toggle('active');});
+            
+            // MODIFIED: toggleTest to remove window.confirm
+            document.getElementById('toggleTest').addEventListener('click', async function() {
+                debugClicks++;
+                this.classList.toggle('active');
+                if (debugClicks === 1) {
+                    console.log("Debug: Displaying database info (see console).");
+                    await debugDatabase();
+                    this.textContent = 'Clear DB';
+                } else {
+                    console.log("Attempting to clear database. This would normally require a custom confirmation.");
+                    // Simulating a confirmation for now, or proceed directly
+                    // In a real app, replace this with a custom modal.
+                    // For this fix, we'll just proceed with clear to avoid blocking.
+                    await clearDatabase();
+                    await loadMemories(); 
+                    this.textContent = 'Cleared';
+                    
+                    debugClicks = 0; 
+                    setTimeout(() => {
+                        this.textContent = 'Debug';
+                        this.classList.remove('active');
+                    }, 1500);
+                }
+            });
+
+            document.getElementById('addBtn').addEventListener('click', () => { document.getElementById('memoryModal').classList.add('active'); });
+            document.getElementById('closeModal').addEventListener('click', () => { document.getElementById('memoryModal').classList.remove('active'); });
+            document.getElementById('memoryModal').addEventListener('click', (e) => { if (e.target === e.currentTarget) document.getElementById('memoryModal').classList.remove('active'); });
+            
+            setupMemoryCreation();
+        });
+
+        function parseCssValueToPx(cssValueString, viewportHeight) {
+            if (typeof cssValueString !== 'string') return parseFloat(cssValueString) || 0;
+            if (cssValueString.endsWith('vh')) return (parseFloat(cssValueString) / 100) * viewportHeight;
+            if (cssValueString.endsWith('px')) return parseFloat(cssValueString);
+            return parseFloat(cssValueString) || 0;
+        }
+
+        function scheduleHeaderUpdate() {
+            if (!headerUpdateTicking) {
+                window.requestAnimationFrame(() => {
+                    performHeaderUpdate();
+                    headerUpdateTicking = false;
+                });
+                headerUpdateTicking = true;
+            }
+        }
+
+        function performHeaderUpdate() {
+            if (!dom.headerSection || !dom.initialContent || !dom.compactContent || !dom.scrollHint) {
+                // console.warn("Required DOM elements for header update not found."); // Keep if helpful
+                return;
+            }
+
+            const scrollY = window.scrollY; 
+            const viewportHeight = window.innerHeight;
+            const rootStyles = getComputedStyle(dom.root);
+            const initialHeaderTargetCss = rootStyles.getPropertyValue('--initial-header-target-height').trim();
+            const minHeaderPx = parseFloat(rootStyles.getPropertyValue('--min-header-px').trim());
+            const scrollDistanceForFullEffect = parseFloat(rootStyles.getPropertyValue('--scroll-distance-for-full-effect').trim());
+            const initialExpandedHeaderPx = parseCssValueToPx(initialHeaderTargetCss, viewportHeight);
+            const totalShrinkableHeightPx = Math.max(0, initialExpandedHeaderPx - minHeaderPx);
+            
+            let shrinkProgress = 0;
+            if (scrollDistanceForFullEffect > 0) {
+                shrinkProgress = Math.min(scrollY / scrollDistanceForFullEffect, 1);
+            } else if (scrollY > 0.1) {
+                shrinkProgress = 1;
+            }
+            
+            let currentHeaderPx = initialExpandedHeaderPx - (totalShrinkableHeightPx * shrinkProgress);
+            currentHeaderPx = Math.max(minHeaderPx, Math.min(currentHeaderPx, initialExpandedHeaderPx));
+            dom.headerSection.style.height = `${currentHeaderPx}px`;
+
+            const initialContentOpacity = 1 - shrinkProgress;
+            const initialContentTransformY = -shrinkProgress * 50; 
+            const initialContentScale = 1 - shrinkProgress * 0.3;
+
+            dom.initialContent.style.opacity = initialContentOpacity;
+            dom.initialContent.style.transform = `translateY(${initialContentTransformY}px) scale(${initialContentScale})`;
+            dom.initialContent.style.display = shrinkProgress < 0.97 ? 'block' : 'none';
+            dom.initialContent.style.pointerEvents = shrinkProgress < 0.97 ? 'auto' : 'none';
+            
+            if (dom.scrollHint) {
+                dom.scrollHint.style.opacity = 1 - (shrinkProgress * 2); 
+                dom.scrollHint.style.display = shrinkProgress < 0.5 ? 'block' : 'none';
+            }
+
+            const compactContentOpacity = shrinkProgress;
+            const compactContentScale = 0.7 + shrinkProgress * 0.3; 
+            dom.compactContent.style.opacity = compactContentOpacity;
+            dom.compactContent.style.transform = `translateY(-50%) scale(${compactContentScale})`;
+            dom.compactContent.style.display = shrinkProgress > 0.03 ? 'flex' : 'none';
+            dom.compactContent.style.pointerEvents = shrinkProgress > 0.97 ? 'auto' : 'none';
+        }
+
+        async function initializeApp() { 
+            try { 
+                await loadMemories(); 
+            } catch (e) { 
+                console.error("Error initializing app:", e); 
+                if(document.getElementById('loadingIndicator')) document.getElementById('loadingIndicator').textContent = 'Failed to load memories';
+            }
+        }
+        async function loadMemories() { 
+            try { 
+                const m = await db.memories.orderBy('date').reverse().toArray(); 
+                displayMemories(m); 
+                updateMemoryStats(m.length); 
+                performHeaderUpdate(); 
+            } catch (e) { 
+                console.error("Error loading memories:", e);
+            }
+        }
+        async function saveMemory(memoryData) { 
+            return await db.memories.add({...memoryData, timestamp: new Date().toISOString()}); 
+        }
+        async function debugDatabase() { 
+            const c = await db.memories.count(); 
+            console.log(`Database - Total memories: ${c}`); 
+            // Instead of alert:
+            // const debugInfoEl = document.getElementById('someDebugOutputElement');
+            // if(debugInfoEl) debugInfoEl.textContent = `Memories in DB: ${c}`;
+        }
+        async function clearDatabase() { 
+            await db.memories.clear(); 
+            console.log('Database cleared');
+        }
+        
+        function displayMemories(memories) { 
+            const t=document.getElementById('timeline'),l=document.getElementById('loadingIndicator');
+            if(l)l.style.display='none';
+            t.innerHTML='';
+            if(memories.length===0){
+                t.innerHTML=`<div style="text-align:center;padding:3rem;color:#6b7280"><div style="font-size:3rem;margin-bottom:1rem">📝</div><h3 style="color:#374151;margin-bottom:1rem">No memories yet</h3><p>Start by adding your first memory!</p></div>`
+            }else{
+                const g=groupMemoriesByDate(memories);
+                Object.entries(g).forEach(([d,dm])=>{
+                    const s=document.createElement('div');
+                    s.className='date-section';
+                    s.innerHTML=`<div class="date-header">${formatDateHeader(d)}</div><div class="date-memories"></div>`;
+                    const mc=s.querySelector('.date-memories');
+                    dm.forEach(mem=>mc.appendChild(createMemoryElement(mem)));
+                    t.appendChild(s)
+                })
+            }
+            setupTimelineInteractions();
+        }
+        function groupMemoriesByDate(memories) { return memories.reduce((a,m)=>{const d=new Date(m.date).toISOString().split('T')[0];a[d]=a[d]||[];a[d].push(m);return a},{})}
+        function formatDateHeader(dateStr) { const d=new Date(dateStr),t=new Date();t.setHours(0,0,0,0);const y=new Date(t);y.setDate(y.getDate()-1);if(d.getTime()===t.getTime())return'Today';if(d.getTime()===y.getTime())return'Yesterday';return d.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}
+        function escapeHTML(str){const d=document.createElement('div');d.appendChild(document.createTextNode(str));return d.innerHTML}
+        function createMemoryElement(memory) { 
+            const i=document.createElement('div');
+            i.className=`timeline-item ${memory.type}`;
+            i.dataset.memoryId=memory.id;
+            const md=new Date(memory.date);
+            const tm=md.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+            let icn='',tl='',ch='';
+            switch(memory.type){
+                case'message':icn='💬';tl='Message';ch=`<div class="message-text">${escapeHTML(memory.text)}</div>`;break;
+                case'audio':icn='🎵';tl='Audio';ch=`<div class="message-text">${escapeHTML(memory.text)}</div><div class="audio-player"><button class="audio-button">▶</button><div class="audio-info"><div class="audio-duration">${memory.duration||'0:00'}</div><div class="audio-waveform"></div></div></div>`;break;
+                case'picture':icn='📸';tl='Picture';ch=`<div class="message-text">${escapeHTML(memory.text)}</div><div class="picture-container"><div class="picture-placeholder">📷 Photo from ${md.toLocaleDateString()}</div></div>`;break;
+            }
+            i.innerHTML=`<div class="item-header"><div class="item-type"><span class="item-icon">${icn}</span> ${tl}</div><div class="item-time">${tm}</div></div><div class="item-content">${ch}</div>`;
+            return i;
+        }
+        function updateMemoryStats(count) { 
+            const memCountEl = document.getElementById('memoryCount');
+            const compactMemCountEl = document.getElementById('compactMemoryCount');
+            if (memCountEl) memCountEl.textContent = count;
+            if (compactMemCountEl) compactMemCountEl.textContent = count;
+        }
+
+        // Re-defining setupMemoryCreation fully
+        function setupMemoryCreation() {
+            const memoryModal = document.getElementById('memoryModal');
+            const memoryForm = document.getElementById('memoryForm');
+            const typeOptions = document.querySelectorAll('.type-option');
+            const audioControls = document.getElementById('audioControls');
+            const pictureControls = document.getElementById('pictureControls');
+            const recordBtn = document.getElementById('recordBtn');
+            const recordingStatus = document.getElementById('recordingStatus');
+            const pictureStatus = document.getElementById('pictureStatus');
+            const memoryTextEl = document.getElementById('memoryText');
+            const memoryDateEl = document.getElementById('memoryDate');
+
+            let selectedType = 'message'; // Default type
+            let isRecording = false;
+            let hasAudio = false;
+            let hasPicture = false;
+            let recordingDuration = 0;
+            let recordingInterval;
+
+            if (!memoryForm || !memoryModal || typeOptions.length === 0) {
+                console.error("Memory creation form or its components not found. Aborting setup.");
+                return;
+            }
+            console.log("Memory creation components found. Setting up listeners.");
+
+
+            typeOptions.forEach(option => {
+                option.addEventListener('click', () => {
+                    typeOptions.forEach(opt => opt.classList.remove('active'));
+                    option.classList.add('active');
+                    selectedType = option.dataset.type;
+                    if(audioControls) audioControls.classList.toggle('active', selectedType === 'audio');
+                    if(pictureControls) pictureControls.classList.toggle('active', selectedType === 'picture');
+                });
+            });
+
+            if(recordBtn) recordBtn.addEventListener('click', () => {
+                if (!isRecording) {
+                    isRecording = true; hasAudio = false; recordingDuration = 0;
+                    recordBtn.textContent = '⏹️ Stop Recording'; recordBtn.classList.add('recording');
+                    if(recordingStatus) recordingStatus.textContent = 'Recording... 0:00';
+                    let seconds = 0;
+                    recordingInterval = setInterval(() => {
+                        seconds++; recordingDuration = seconds;
+                        if(recordingStatus) recordingStatus.textContent = `Recording... ${Math.floor(seconds/60)}:${(seconds%60).toString().padStart(2, '0')}`;
+                    }, 1000);
+                    setTimeout(() => { if (isRecording) stopLocalRecording(); }, 60000); // Auto-stop
+                } else {
+                    stopLocalRecording();
+                }
+            });
+
+            function stopLocalRecording() {
+                if (!isRecording || !recordBtn) return; 
+                clearInterval(recordingInterval);
+                isRecording = false; hasAudio = true;
+                recordBtn.textContent = '🎤 Record Again'; recordBtn.classList.remove('recording');
+                if(recordingStatus) recordingStatus.textContent = `Recording saved! (${Math.floor(recordingDuration/60)}:${(recordingDuration%60).toString().padStart(2, '0')})`;
+            }
+            
+            const cameraBtn = document.getElementById('cameraBtn');
+            const galleryBtn = document.getElementById('galleryBtn');
+
+            if(cameraBtn) cameraBtn.addEventListener('click', () => {
+                if(pictureStatus) pictureStatus.textContent = 'Taking photo...';
+                setTimeout(() => { hasPicture = true; if(pictureStatus) pictureStatus.textContent = '📷 Photo captured!'; }, 1500);
+            });
+            if(galleryBtn) galleryBtn.addEventListener('click', () => {
+                if(pictureStatus) pictureStatus.textContent = 'Opening gallery...';
+                setTimeout(() => { hasPicture = true; if(pictureStatus) pictureStatus.textContent = '🖼️ Photo selected!'; }, 1000);
+            });
+
+            memoryForm.addEventListener('submit', async (e) => {
+                e.preventDefault(); 
+                console.log("Form submission prevented."); // Confirm preventDefault was called
+
+                if(!memoryTextEl || !memoryDateEl){
+                    console.error("Memory text or date element not found during submit.");
+                    return;
+                }
+                const text = memoryTextEl.value.trim();
+                const dateInput = memoryDateEl.value;
+                
+                if (!text) { console.error('Memory text is required.'); return; }
+                if (!dateInput) { console.error('Memory date is required.'); return; }
+                if (selectedType === 'audio' && !hasAudio) { console.error('Audio recording is required.'); return; }
+                if (selectedType === 'picture' && !hasPicture) { console.error('Picture is required.'); return; }
+
+                try {
+                    const memoryData = {
+                        type: selectedType, text, date: dateInput,
+                        audioData: selectedType === 'audio' ? 'sim_audio.mp3' : null, // Simulated data
+                        pictureData: selectedType === 'picture' ? 'sim_image.jpg' : null, // Simulated data
+                        duration: selectedType === 'audio' ? `${Math.floor(recordingDuration/60)}:${(recordingDuration%60).toString().padStart(2, '0')}` : null
+                    };
+                    console.log("Attempting to save memory:", memoryData);
+                    await saveMemory(memoryData);
+                    console.log("Memory saved successfully. Reloading memories...");
+                    await loadMemories();
+                    resetLocalMemoryForm();
+                    memoryModal.classList.remove('active');
+                    console.log("Form reset and modal closed.");
+                } catch (error) {
+                    console.error('Failed to save memory in submit handler:', error);
+                }
+            });
+             console.log("Memory form submit listener attached.");
+
+            function resetLocalMemoryForm() { // Renamed to avoid confusion if there was a global one
+                if(memoryForm) memoryForm.reset();
+                if(memoryDateEl) memoryDateEl.valueAsDate = new Date();
+                
+                typeOptions.forEach(opt => opt.classList.remove('active'));
+                if(typeOptions.length > 0) typeOptions[0].classList.add('active');
+                selectedType = 'message'; // Reset internal state
+                
+                if(audioControls) audioControls.classList.remove('active');
+                if(pictureControls) pictureControls.classList.remove('active');
+                
+                isRecording = false; hasAudio = false; hasPicture = false; recordingDuration = 0;
+                if(recordingInterval) clearInterval(recordingInterval);
+                if(recordingStatus) recordingStatus.textContent = '';
+                if(pictureStatus) pictureStatus.textContent = '';
+                if(recordBtn) {
+                    recordBtn.textContent = '🎤 Start Recording';
+                    recordBtn.classList.remove('recording');
+                }
+            }
+        }
+
+
+        function setupTimelineInteractions() { 
+            document.querySelectorAll('.audio-button').forEach(button => {
+                button.removeEventListener('click', handleAudioPlay); 
+                button.addEventListener('click', handleAudioPlay);
+            });
+            document.querySelectorAll('.picture-container').forEach(container => {
+                container.removeEventListener('click', handlePictureView); 
+                container.addEventListener('click', handlePictureView);
+            });
+        }
+
+        function handleAudioPlay() {
+            const isPlaying = this.textContent === '⏸';
+            document.querySelectorAll('.audio-button').forEach(btn => { 
+                btn.textContent = '▶'; btn.style.background = '#6b7280';
+            });
+            if (!isPlaying) {
+                this.textContent = '⏸'; this.style.background = '#dc2626';
+                setTimeout(() => {
+                    if(this.textContent === '⏸') { 
+                         this.textContent = '▶'; this.style.background = '#6b7280';
+                    }
+                }, 3000); 
+            }
+        }
+        function handlePictureView() {
+            // console.log('View picture:', this.closest('.timeline-item').dataset.memoryId); // Keep for debug
+            this.style.transform = 'scale(1.03)';
+            setTimeout(() => this.style.transform = '', 200);
+        }
+        
+        function handleSwipe(direction) {
+            if (direction === 'up' && window.scrollY < 10 && dom.headerSection && dom.headerSection.offsetHeight >= window.innerHeight * 0.95) {
+                 window.scrollTo({ top: 100, behavior: 'smooth' });
+            } else if (direction === 'down' && window.scrollY < parseFloat(getComputedStyle(dom.root).getPropertyValue('--scroll-distance-for-full-effect').trim())) {
+                 window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+    </script>
+</body>
+</html>

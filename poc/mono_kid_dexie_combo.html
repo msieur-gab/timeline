@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emma's Memory App (Fix Calendar Pill Day Colors)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.4/dexie.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #B8BCC4;
+            --bg-secondary: #FFFFFF; 
+            --text-primary: #FFFFFF;
+            --text-secondary: #666666;
+            
+            --calendar-day-default-bg: #EAEAEA; 
+            --calendar-day-default-text: #333333; 
+            --calendar-day-other-month-opacity: 0.4; 
+            --calendar-pill-active-bg: #546E7A;   
+            --calendar-day-active-text: #FFFFFF; 
+            --calendar-day-today-bg: #000000;   
+            --calendar-day-today-text: #FFFFFF;
+            --calendar-day-selected-ring: #007AFF; 
+
+
+            --initial-header-target-height: 100vh;
+            --min-header-px: 80px;          
+            --scroll-distance-for-full-effect: 500; 
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f0f0f0; 
+            color: #333;
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh; 
+            width: 100%;
+            max-width: 400px; 
+            margin: 0 auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            overflow: hidden; 
+            position: sticky;
+            top: 0;
+            left: 0; 
+        }
+
+        .header-section { 
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh; 
+            min-height: var(--min-header-px);    
+            flex-shrink: 0; 
+            overflow: hidden;
+            transition: height 0.1s ease-out; 
+            will-change: height;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .header-content { 
+            flex-grow: 1; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 60px 20px 40px 20px; 
+            position: relative;
+            width: 100%;
+        }
+
+        .header-controls { 
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .toggle-btn { 
+            background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);
+            color: white; padding: 6px 12px; border-radius: 20px; font-size: 11px;
+            cursor: pointer; transition: all 0.2s; text-transform: uppercase;
+            letter-spacing: 0.5px; font-weight: 500; touch-action: manipulation;
+        }
+        .toggle-btn:hover { background: rgba(255,255,255,0.3); }
+        .toggle-btn.active { background: rgba(255,255,255,0.9); color: #333; }
+
+        .initial-content { 
+            display: block; text-align: center;
+            transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+            will-change: opacity, transform;
+        }
+        .kid-photo { 
+            width: 140px; height: 140px; border-radius: 50%;
+            background: var(--bg-secondary); 
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140"><circle cx="70" cy="70" r="70" fill="%23E8E8E8"/><circle cx="70" cy="55" r="20" fill="%23B8BCC4" opacity="0.7"/><ellipse cx="70" cy="100" rx="28" ry="22" fill="%23B8BCC4" opacity="0.7"/></svg>');
+            background-size: cover; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        .kid-name { font-size: 3rem; font-weight: 700; margin-bottom: 8px; }
+        .kid-age { font-size: 1.1rem; opacity: 0.9; margin-bottom: 40px; }
+        .stats { display: flex; gap: 60px; }
+        .stat-item { text-align: center; }
+        .stat-number { font-size: 5rem; font-weight: 200; line-height: 0.8; margin-bottom: 16px; }
+        .stat-label { font-size: 1rem; opacity: 0.9; line-height: 1.4; }
+
+        .scroll-hint { 
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            opacity: 0.8; font-size: 0.9rem; text-transform: uppercase;
+            letter-spacing: 1px; color: var(--text-primary); pointer-events: none; 
+        }
+        .scroll-hint::after { content: '↓'; display: block; text-align: center; margin-top: 8px; animation: bounce 2s infinite; }
+        @keyframes bounce { 0%,20%,50%,80%,100%{transform:translateY(0)}40%{transform:translateY(-8px)}60%{transform:translateY(-4px)} }
+
+        .compact-content { 
+            display: none; align-items: center; width: calc(100% - 3rem);
+            position: absolute; top: 50%; left: 1.5rem; transform: translateY(-50%) scale(0.8); 
+            pointer-events: none; transform-origin: left center;
+            transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+            will-change: opacity, transform; opacity: 0; 
+        }
+        .compact-photo { width:32px;height:32px;border-radius:50%;background:var(--bg-secondary);background-image:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="16" fill="%23E8E8E8"/><circle cx="16" cy="12" r="4" fill="%23B8BCC4" opacity="0.7"/><ellipse cx="16" cy="22" rx="6" ry="4" fill="%23B8BCC4" opacity="0.7"/></svg>');background-size:cover;margin-right:12px}
+        .compact-text { font-size:0.9rem }
+        .compact-text .stat-number { display:inline;font-size:1.2rem;font-weight:600;margin-right:.25rem }
+        .compact-text .stat-label { display:inline;font-size:.9rem }
+
+        .content-section {
+            background: var(--bg-secondary); 
+            flex-grow: 1; 
+            display: flex; 
+            flex-direction: column;
+            overflow: hidden; 
+            position: relative; 
+        }
+
+        .activity-calendar-container { 
+            flex-shrink: 0; 
+            position: sticky;
+            top: 0; 
+            background-color: var(--bg-secondary); 
+            z-index: 10; 
+            padding: 10px 10px 0 10px; 
+            border-bottom: 1px solid #e0e0e0; 
+        }
+
+        .activity-calendar-view { display: flex; flex-direction: column; }
+
+        .calendar-controls-header { 
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 8px; 
+            margin-bottom: 8px; 
+        }
+        .calendar-controls-header h3 { font-size: 1.1rem; color: #444; font-weight: 500; }
+        .calendar-nav button { 
+            background: #f4f4f4; border: 1px solid #dcdcdc; border-radius: 4px;
+            padding: 5px 10px; cursor: pointer; margin-left: 5px;
+            color: #555; font-size: 0.85rem;
+        }
+        .calendar-nav button:hover { background-color: #e8e8e8; }
+
+        .weekdays-header {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px; 
+            margin-bottom: 8px; 
+            padding: 4px 0;
+        }
+        .weekday-label { text-align: center; font-size: 0.7rem; color: #888; font-weight: 500; }
+
+        .calendar-grid { 
+            overflow-y: auto; 
+            -webkit-overflow-scrolling: touch;
+            max-height: 280px; 
+            padding: 2px; 
+        }
+        .calendar-weeks { display: flex; flex-direction: column; gap: 6px; }
+        .calendar-week { 
+            display: grid; 
+            grid-template-columns: repeat(7, 1fr); 
+            gap: 6px; 
+            align-items: center; 
+            position: relative; 
+        }
+
+        .calendar-day { 
+            width: 24px; 
+            height: 24px; 
+            border-radius:50%; 
+            position:relative; 
+            display:flex; 
+            align-items:center;
+            justify-content:center; 
+            cursor:pointer; 
+            transition:transform .1s ease,background-color .2s ease;
+            z-index:2; 
+            background-color:var(--calendar-day-default-bg); 
+            color:var(--calendar-day-default-text);
+            margin: 0 auto; 
+        }
+        .calendar-day:hover:not(.other-month):not(.selected){background-color:#d0d0d0;}
+        .calendar-day.other-month{
+            background-color:var(--calendar-day-other-month-bg);
+            opacity:var(--calendar-day-other-month-opacity);
+            cursor:default;
+        }
+        .calendar-day.other-month .day-number{color:var(--calendar-day-other-month-text)}
+        
+        .calendar-day.single-active-day { 
+            background-color: var(--calendar-pill-active-bg); 
+            color: var(--calendar-day-active-text);
+        }
+
+        .calendar-day.today{
+            background-color:var(--calendar-day-today-bg);
+            color:var(--calendar-day-today-text);
+            z-index:3; 
+        }
+       
+        .calendar-day.selected{box-shadow:0 0 0 2px var(--calendar-day-selected-ring) inset;z-index:4}
+        .day-number{font-size:.65rem;font-weight:500;z-index:3;pointer-events:none}
+
+        .activity-streak-pill {
+            position: absolute;
+            height: 24px; 
+            background-color: var(--calendar-pill-active-bg);
+            
+            z-index: 1; 
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none; 
+        }
+        
+        .day-memories-display-area{flex-grow:1;overflow-y:auto;padding:15px;background-color:#f8f9fa}
+        .day-memories-header{
+            display:flex; 
+            justify-content:space-between; 
+            align-items:center;
+            margin-bottom:10px;
+            padding-bottom:10px;
+            border-bottom:1px solid #eee
+        }
+        .day-memories-header h4{font-size:1rem;color:#333;font-weight:600}
+        .memories-list-inline{list-style:none;padding:0}
+        .memories-list-inline li{background-color:#fff;border:1px solid #e0e0e0;border-left:3px solid var(--calendar-pill-active-bg);padding:10px;margin-bottom:8px;border-radius:4px;font-size:.9rem}
+        .memories-list-inline li .memory-time{font-size:.75rem;color:#777;display:block;margin-bottom:4px}
+        .memories-list-inline li .memory-text{ 
+            word-break: break-word;
+        }
+        .memories-list-inline li .memory-date-header { 
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #333;
+            margin-top: 10px;
+            margin-bottom: 5px;
+            padding-bottom: 3px;
+            border-bottom: 1px dashed #ccc;
+        }
+        .memories-list-inline li:first-child .memory-date-header {
+            margin-top: 0;
+        }
+
+        .no-memories-inline{text-align:center;color:#777;padding:20px 0;font-style:italic}
+        
+        .memory-modal{position:fixed;top:0;left:0;width:100%;height:100vh;background:rgba(0,0,0,.5);z-index:2000;opacity:0;visibility:hidden;transition:all .3s ease;display:flex;align-items:center;justify-content:center}
+        .memory-modal.active{opacity:1;visibility:visible}
+        .modal-content{background:#fff;border-radius:16px;padding:24px;max-width:350px;width:90%;max-height:80vh;overflow-y:auto;transform:scale(.8);transition:transform .3s ease;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+        .memory-modal.active .modal-content{transform:scale(1)}
+        .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid #eee}
+        .modal-title{font-size:1.2rem;font-weight:600;color:#333}
+        .close-btn{background:0 0;border:none;font-size:24px;cursor:pointer;color:#666;padding:4px;border-radius:4px;transition:background .2s;touch-action:manipulation}
+        .close-btn:hover{background:#f5f5f5}
+        .memory-type-selector{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}.type-option{padding:16px 12px;border:2px solid #e5e7eb;border-radius:8px;text-align:center;cursor:pointer;transition:all .2s;background:#fff}.type-option:hover{border-color:var(--calendar-pill-active-bg)}.type-option.active{border-color:var(--calendar-pill-active-bg);background:#f9fafb}.type-option.message.active{border-color:#10b981;background:#ecfdf5}.type-option.audio.active{border-color:#f59e0b;background:#fffbeb}.type-option.picture.active{border-color:#8b5cf6;background:#f5f3ff}.type-icon{font-size:1.5rem;margin-bottom:4px;display:block}.type-label{font-size:.75rem;font-weight:500;text-transform:uppercase;letter-spacing:.5px}.form-group{margin-bottom:16px}.form-label{display:block;margin-bottom:6px;font-weight:500;color:#374151;font-size:.9rem}.form-input{width:100%;padding:10px 12px;border:2px solid #e5e7eb;border-radius:6px;font-size:.9rem;transition:all .2s;background:#fafafa}.form-input:focus{outline:0;border-color:var(--calendar-pill-active-bg);background:#fff;box-shadow:0 0 0 3px rgba(84,110,122,.1)}.form-textarea{resize:vertical;min-height:80px;font-family:inherit}.audio-controls{display:none;background:#fffbeb;border-radius:8px;padding:12px;margin-top:8px;text-align:center}.audio-controls.active{display:block}.record-btn{background:#f59e0b;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:.9rem;cursor:pointer;transition:all .2s}.record-btn:hover{background:#d97706}.record-btn.recording{background:#dc2626;animation:pulse 1s infinite}@keyframes pulse{0%,to{opacity:1}50%{opacity:.7}}.picture-controls{display:none;background:#f5f3ff;border-radius:8px;padding:12px;margin-top:8px;text-align:center}.picture-controls.active{display:block}.picture-btn{background:#8b5cf6;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:.9rem;cursor:pointer;transition:all .2s;margin:0 5px}.picture-btn:hover{background:#7c3aed}
+        .save-memory-btn{background:var(--calendar-pill-active-bg);color:#fff;border:none;padding:12px 24px;border-radius:6px;font-size:.95rem;font-weight:500;cursor:pointer;width:100%;transition:all .3s ease;touch-action:manipulation}.save-memory-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(84,110,122,.3)}.save-memory-btn:active{transform:translateY(0)}.save-memory-btn:disabled{opacity:.6;cursor:not-allowed}
+        .floating-add-btn{position:fixed;bottom:30px;right:30px;width:60px;height:60px;background:var(--calendar-pill-active-bg);border:none;border-radius:50%;color:#fff;font-size:24px;cursor:pointer;box-shadow:0 8px 25px rgba(84,110,122,.4);transition:all .3s ease;z-index:1000;touch-action:manipulation}
+        @media (min-width:401px){.floating-add-btn{right:calc(50vw - 200px + 400px - 60px - 20px);right:max(30px,calc(50vw - 200px + 320px))}}
+        @media (max-width:400px){.floating-add-btn{right:20px}}
+        .floating-add-btn:hover{transform:scale(1.1);box-shadow:0 12px 35px rgba(84,110,122,.5)}.floating-add-btn:active{transform:scale(.95)}
+        .loading{text-align:center;padding:2rem;color:#6b7280}.loading::after{content:'...';animation:dots 1.5s infinite}@keyframes dots{0%,20%{content:'.'}40%{content:'..'}60%{content:'...'}80%,to{content:'...'}}
+        .swipe-indicator{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(84,110,122,.9);color:#fff;padding:8px 16px;border-radius:20px;font-size:12px;z-index:1001;opacity:0;transition:opacity .3s ease;pointer-events:none}.swipe-indicator.show{opacity:1}
+        @media (max-width:480px){
+            .content-section{padding:5px}
+            .activity-calendar-container{padding:5px 5px 0}
+            .weekdays-header{gap:1px;margin-bottom:3px;padding:2px 0}
+            .calendar-week{gap:1px}
+            .calendar-day{width:20px;height:20px} 
+            .day-number{font-size:.55rem}
+            .activity-streak-pill{height:20px;border-radius:10px}
+            .day-memories-display-area{padding:10px}
+            .stats{gap:30px}.stat-number{font-size:2.5rem}.kid-name{font-size:1.8rem}.kid-age{font-size:.9rem}.kid-photo{width:80px;height:80px;margin-bottom:10px}
+        }
+        .scroll-extender { height: 150vh; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div class="app-container" id="appContainer">
+        <div class="header-section" id="headerSection">
+            <div class="header-content">
+                <div class="header-controls">
+                    <button class="toggle-btn active" id="toggleMode">Mode</button>
+                    <button class="toggle-btn" id="toggleTest">Debug</button>
+                </div>
+                <div class="initial-content" id="initialContent">
+                    <div class="kid-photo"></div>
+                    <div class="kid-name">Emma</div>
+                    <div class="kid-age">8 years old</div>
+                    <div class="stats">
+                        <div class="stat-item">
+                            <div class="stat-number" id="memoryCount">0</div>
+                            <div class="stat-label">memories<br>this year</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number" id="daysToBirthday">133</div>
+                            <div class="stat-label">days to<br>birthday</div>
+                        </div>
+                    </div>
+                    <div class="scroll-hint" id="scrollHint">Scroll Down</div>
+                </div>
+                <div class="compact-content" id="compactContent">
+                    <div class="compact-photo"></div>
+                    <div class="compact-text">
+                        <span class="stat-number" id="compactMemoryCount">0</span>
+                        <span class="stat-label">memories • Emma, 8 years old</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="content-section" id="contentSection">
+            <div class="activity-calendar-container" id="activityCalendarContainer">
+                <div class="calendar-controls-header">
+                    <h3 id="calendarCurrentMonthYear">Month Year</h3>
+                    <div class="calendar-nav">
+                        <button id="calendarPrevMonthBtn">&lt; Prev</button>
+                        <button id="calendarNextMonthBtn">Next &gt;</button>
+                    </div>
+                </div>
+                <div class="weekdays-header" id="weekdaysHeader">
+                    <div class="weekday-label">M</div><div class="weekday-label">T</div><div class="weekday-label">W</div><div class="weekday-label">T</div><div class="weekday-label">F</div><div class="weekday-label">S</div><div class="weekday-label">S</div>
+                </div>
+                <div class="calendar-grid" id="calendarGrid">
+                    <div id="loadingIndicatorCalendar" class="loading">Loading Calendar...</div>
+                </div>
+            </div>
+
+            <div class="day-memories-display-area" id="dayMemoriesDisplayArea">
+                <div class="day-memories-header" id="dayMemoriesHeader"> <!-- Initially visible, title updates -->
+                    <h4 id="dayMemoriesTitle">Memories for [Month]</h4>
+                    {/* Button removed as per user request for this iteration */}
+                    {/* <button class="add-memory-for-day-btn" id="addMemoryForSelectedDayBtn">Add Memory</button> */}
+                </div>
+                <ul class="memories-list-inline" id="memoriesListInline"></ul>
+                <div class="no-memories-inline" id="noMemoriesInline" style="display:block;">
+                    Memories for the current month will appear here.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="scroll-extender"></div>
+    <div class="swipe-indicator" id="swipeIndicator">Swipe detected!</div>
+    <button class="floating-add-btn" id="addBtn">+</button>
+    
+    <div class="memory-modal" id="memoryEntryModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="memoryEntryModalTitle">Add New Memory</div>
+                <button class="close-btn" id="closeMemoryEntryModal">&times;</button>
+            </div>
+            <form id="memoryForm">
+                <div class="memory-type-selector">
+                    <div class="type-option message active" data-type="message"><span class="type-icon">💬</span><div class="type-label">Message</div></div>
+                    <div class="type-option audio" data-type="audio"><span class="type-icon">🎵</span><div class="type-label">Audio</div></div>
+                    <div class="type-option picture" data-type="picture"><span class="type-icon">📸</span><div class="type-label">Picture</div></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="memoryDate">Date</label>
+                    <input type="date" class="form-input" id="memoryDate" required />
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="memoryText">Memory Description</label>
+                    <textarea class="form-input form-textarea" id="memoryText" placeholder="Describe this special moment..." required></textarea>
+                </div>
+                <div class="audio-controls" id="audioControls"><button type="button" class="record-btn" id="recordBtn">🎤 Start Recording</button><div id="recordingStatus" style="margin-top:8px;font-size:.8rem;color:#92400e"></div></div>
+                <div class="picture-controls" id="pictureControls"><button type="button" class="picture-btn" id="cameraBtn">📷 Take Photo</button><button type="button" class="picture-btn" id="galleryBtn">🖼️ From Gallery</button><div id="pictureStatus" style="margin-top:8px;font-size:.8rem;color:#7c3aed"></div></div>
+                <button type="submit" class="save-memory-btn">Save Memory</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const db = new Dexie('EmmaMemoriesDB');
+        db.version(1).stores({
+            memories: '++id, type, text, date, timestamp, audioData, pictureData, duration' 
+        });
+
+        let debugClicks = 0;
+        let headerUpdateTicking = false;
+        const dom = {};
+        let activityCalendarInstance; 
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            dom.root = document.documentElement;
+            dom.headerSection = document.getElementById('headerSection');
+            dom.initialContent = document.getElementById('initialContent');
+            dom.compactContent = document.getElementById('compactContent');
+            dom.scrollHint = document.getElementById('scrollHint'); 
+            dom.calendarGrid = document.getElementById('calendarGrid');
+            dom.currentMonthYearEl = document.getElementById('calendarCurrentMonthYear');
+            dom.prevMonthBtn = document.getElementById('calendarPrevMonthBtn');
+            dom.nextMonthBtn = document.getElementById('calendarNextMonthBtn');
+            dom.loadingIndicatorCalendar = document.getElementById('loadingIndicatorCalendar');
+            dom.dayMemoriesDisplayArea = document.getElementById('dayMemoriesDisplayArea');
+            dom.dayMemoriesHeader = document.getElementById('dayMemoriesHeader'); 
+            dom.dayMemoriesTitle = document.getElementById('dayMemoriesTitle');
+            dom.memoriesListInline = document.getElementById('memoriesListInline');
+            dom.noMemoriesInline = document.getElementById('noMemoriesInline');
+            dom.memoryEntryModal = document.getElementById('memoryEntryModal');
+            dom.memoryForm = document.getElementById('memoryForm');
+            dom.closeMemoryEntryModalBtn = document.getElementById('closeMemoryEntryModal');
+            dom.memoryDateInput = document.getElementById('memoryDate'); 
+
+            await initializeAppAndCalendar(); 
+
+            window.addEventListener('scroll', scheduleHeaderUpdate);
+            window.addEventListener('resize', scheduleHeaderUpdate);
+            performHeaderUpdate(); 
+
+            let touchStartY = 0, touchStartX = 0, touchStartTime = 0;
+            const swipeIndicator = document.getElementById('swipeIndicator');
+            document.addEventListener('touchstart', (e) => {const t=e.touches[0];touchStartY=t.clientY;touchStartX=t.clientX;touchStartTime=Date.now();}, { passive: true });
+            document.addEventListener('touchend', (e) => {if(!e.changedTouches[0])return;const t=e.changedTouches[0];const dY=t.clientY-touchStartY;const dX=t.clientX-touchStartX;const dT=Date.now()-touchStartTime;const dist=Math.sqrt(dX*dX+dY*dY);if(dist>50&&dT<300){const sD=Math.abs(dX)>Math.abs(dY)?(dX>0?'right':'left'):(dY>0?'down':'up');if(swipeIndicator){swipeIndicator.textContent=`Swiped ${sD}!`;swipeIndicator.classList.add('show');setTimeout(()=>swipeIndicator.classList.remove('show'),1500);}handleSwipe(sD);}}, { passive: true });
+            
+            document.getElementById('toggleMode').addEventListener('click', function() { this.classList.toggle('active');});
+            const toggleTestBtn = document.getElementById('toggleTest');
+            if(toggleTestBtn) {
+                toggleTestBtn.addEventListener('click', async function() {
+                    debugClicks++; this.classList.toggle('active');
+                    if (debugClicks === 1) { console.log("Debug: DB info."); await debugDatabase(); this.textContent = 'Clear DB'; } 
+                    else { console.log("Clearing DB."); await clearDatabase(); this.textContent = 'Cleared'; debugClicks = 0; setTimeout(() => { this.textContent = 'Debug'; this.classList.remove('active'); }, 1500); }
+                });
+            }
+            
+            document.getElementById('addBtn').addEventListener('click', () => {
+                if(dom.memoryDateInput) {
+                    const calSelectedDate = activityCalendarInstance ? activityCalendarInstance.selectedDateStr : null;
+                    dom.memoryDateInput.value = calSelectedDate || new Date().toISOString().split('T')[0];
+                }
+                openMemoryEntryModal('Add New Memory', dom.memoryDateInput.value); // Pass date to prefill
+            });
+            
+            if(dom.closeMemoryEntryModalBtn) dom.closeMemoryEntryModalBtn.addEventListener('click', () => { if(dom.memoryEntryModal) dom.memoryEntryModal.classList.remove('active'); });
+            if(dom.memoryEntryModal) dom.memoryEntryModal.addEventListener('click', (e) => { if (e.target === dom.memoryEntryModal) dom.memoryEntryModal.classList.remove('active'); });
+            setupMainMemoryForm(); 
+        });
+        
+        function openMemoryEntryModal(title, dateToSet = null) { 
+            if(dom.memoryEntryModal) {
+                dom.memoryEntryModal.classList.add('active');
+                const titleEl = dom.memoryEntryModal.querySelector('#memoryEntryModalTitle');
+                if (titleEl) titleEl.textContent = title;
+                if (dom.memoryDateInput) {
+                    dom.memoryDateInput.value = dateToSet || new Date().toISOString().split('T')[0];
+                }
+            }
+        }
+
+        function parseCssValueToPx(cssValueString, viewportHeight) { if (typeof cssValueString !== 'string') return parseFloat(cssValueString) || 0; if (cssValueString.endsWith('vh')) return (parseFloat(cssValueString) / 100) * viewportHeight; if (cssValueString.endsWith('px')) return parseFloat(cssValueString); return parseFloat(cssValueString) || 0; }
+        function scheduleHeaderUpdate() { if (!headerUpdateTicking) { window.requestAnimationFrame(() => { performHeaderUpdate(); headerUpdateTicking = false; }); headerUpdateTicking = true; } }
+        function performHeaderUpdate() { 
+            if (!dom.headerSection || !dom.initialContent || !dom.compactContent || !dom.scrollHint) return;
+            const scrollY = window.scrollY; const viewportHeight = window.innerHeight; const rootStyles = getComputedStyle(dom.root);
+            const initialHeaderTargetCss = rootStyles.getPropertyValue('--initial-header-target-height').trim();
+            const minHeaderPx = parseFloat(rootStyles.getPropertyValue('--min-header-px').trim());
+            const scrollDistanceForFullEffect = parseFloat(rootStyles.getPropertyValue('--scroll-distance-for-full-effect').trim());
+            const initialExpandedHeaderPx = parseCssValueToPx(initialHeaderTargetCss, viewportHeight);
+            const totalShrinkableHeightPx = Math.max(0, initialExpandedHeaderPx - minHeaderPx);
+            let shrinkProgress = 0;
+            if (scrollDistanceForFullEffect > 0) { shrinkProgress = Math.min(scrollY / scrollDistanceForFullEffect, 1); } else if (scrollY > 0.1) { shrinkProgress = 1; }
+            let currentHeaderPx = initialExpandedHeaderPx - (totalShrinkableHeightPx * shrinkProgress);
+            currentHeaderPx = Math.max(minHeaderPx, Math.min(currentHeaderPx, initialExpandedHeaderPx));
+            dom.headerSection.style.height = `${currentHeaderPx}px`;
+            const initialContentOpacity = 1 - shrinkProgress; const initialContentTransformY = -shrinkProgress * 50; const initialContentScale = 1 - shrinkProgress * 0.3;
+            dom.initialContent.style.opacity = initialContentOpacity; dom.initialContent.style.transform = `translateY(${initialContentTransformY}px) scale(${initialContentScale})`;
+            dom.initialContent.style.display = shrinkProgress < 0.97 ? 'block' : 'none'; dom.initialContent.style.pointerEvents = shrinkProgress < 0.97 ? 'auto' : 'none';
+            if (dom.scrollHint) { dom.scrollHint.style.opacity = 1 - (shrinkProgress * 2); dom.scrollHint.style.display = shrinkProgress < 0.5 ? 'block' : 'none'; }
+            const compactContentOpacity = shrinkProgress; const compactContentScale = 0.7 + shrinkProgress * 0.3; 
+            dom.compactContent.style.opacity = compactContentOpacity; dom.compactContent.style.transform = `translateY(-50%) scale(${compactContentScale})`;
+            dom.compactContent.style.display = shrinkProgress > 0.03 ? 'flex' : 'none'; dom.compactContent.style.pointerEvents = shrinkProgress > 0.97 ? 'auto' : 'none';
+        }
+
+        async function initializeAppAndCalendar() { 
+            try { 
+                const memories = await db.memories.orderBy('date').reverse().toArray(); 
+                updateMemoryStats(memories.length); 
+                
+                activityCalendarInstance = new ActivityCalendar(dom.calendarGrid, dom.currentMonthYearEl, dom.prevMonthBtn, dom.nextMonthBtn);
+                await activityCalendarInstance.init(); 
+                
+                performHeaderUpdate(); 
+            } catch (e) { 
+                console.error("Error initializing app and calendar:", e); 
+                if(dom.loadingIndicatorCalendar) dom.loadingIndicatorCalendar.textContent = 'Failed to load';
+            }
+        }
+        
+        async function saveMemoryToDB(memoryData) { return await db.memories.add({...memoryData, timestamp: new Date().toISOString()}); }
+        async function getAllMemoriesFromDB() { return await db.memories.toArray(); }
+        async function getMemoriesForDateRangeFromDB(startDateStr, endDateStr) { 
+             return await db.memories
+                .where('date').between(startDateStr, endDateStr, true, true) 
+                .sortBy('timestamp'); 
+        }
+
+        async function debugDatabase() { const c = await db.memories.count(); console.log(`DB memories: ${c}`); }
+        async function clearDatabase() { 
+            await db.memories.clear(); 
+            console.log('DB cleared'); 
+            updateMemoryStats(0); 
+            if(activityCalendarInstance) await activityCalendarInstance.refreshDataAndRender(); 
+            if (dom.memoriesListInline) dom.memoriesListInline.innerHTML = '';
+            if (dom.noMemoriesInline) {
+                dom.noMemoriesInline.textContent = 'Memories for the current month will appear here.';
+                dom.noMemoriesInline.style.display = 'block';
+            }
+            if (dom.dayMemoriesTitle && activityCalendarInstance) { 
+                 dom.dayMemoriesTitle.textContent = `Memories for ${activityCalendarInstance.currentDate.toLocaleString('default', { month: 'long' })} ${activityCalendarInstance.currentDate.getFullYear()}`;
+            } else if (dom.dayMemoriesTitle) {
+                 dom.dayMemoriesTitle.textContent = 'Memories for Current Month'; 
+            }
+        }
+        function updateMemoryStats(count) { const mc=document.getElementById('memoryCount'),cmc=document.getElementById('compactMemoryCount');if(mc)mc.textContent=count;if(cmc)cmc.textContent=count;}
+        function escapeHTML(str){const d=document.createElement('div');d.appendChild(document.createTextNode(str));return d.innerHTML}
+
+        class ActivityCalendar {
+            constructor(gridElement, monthYearElement, prevBtn, nextBtn) { 
+                this.gridEl = gridElement;
+                this.monthYearEl = monthYearElement;
+                this.prevBtn = prevBtn;
+                this.nextBtn = nextBtn;
+                this.currentDate = new Date(); 
+                this.currentDate.setDate(1); 
+                this.activityData = {}; 
+                this.selectedDateStr = null; 
+            }
+
+            async init() {
+                if (!this.gridEl || !this.monthYearEl || !this.prevBtn || !this.nextBtn) {
+                    console.error("Calendar DOM elements missing.");
+                    if(dom.loadingIndicatorCalendar) dom.loadingIndicatorCalendar.textContent = "Calendar Error.";
+                    return;
+                }
+                if(dom.loadingIndicatorCalendar) dom.loadingIndicatorCalendar.style.display = 'block';
+                await this.loadMemoryDataForCalendar(); 
+                this.renderCalendarGrid(); 
+                await this.displayMemoriesForCurrentMonth(); 
+                this.attachEventListeners();
+                if(dom.loadingIndicatorCalendar) dom.loadingIndicatorCalendar.style.display = 'none';
+            }
+
+            async loadMemoryDataForCalendar() { 
+                this.activityData = {};
+                try {
+                    const memories = await getAllMemoriesFromDB();
+                    memories.forEach(memory => {
+                        this.activityData[memory.date] = (this.activityData[memory.date] || 0) + 1; 
+                    });
+                } catch (error) { console.error("Error loading memories for calendar styling:", error); }
+            }
+            
+            async refreshDataAndRender() { 
+                await this.loadMemoryDataForCalendar();
+                this.renderCalendarGrid();
+                await this.displayMemoriesForCurrentMonth(); 
+            }
+
+            formatDate(dateObj) { return dateObj.toISOString().split('T')[0]; }
+
+            renderCalendarGrid() { 
+                if (!this.gridEl) { console.error("Calendar gridEl is null in render."); return; }
+                this.gridEl.innerHTML = ''; 
+                const year = this.currentDate.getFullYear();
+                const month = this.currentDate.getMonth();
+                if (this.monthYearEl) this.monthYearEl.textContent = `${this.currentDate.toLocaleString('default', { month: 'long' })} ${year}`;
+
+                const firstDayOfMonth = new Date(year, month, 1);
+                const lastDayOfMonth = new Date(year, month + 1, 0);
+                const daysInMonth = lastDayOfMonth.getDate();
+                let startingDayOfWeek = (firstDayOfMonth.getDay() + 6) % 7; 
+                const todayStr = this.formatDate(new Date());
+                const weeksContainer = document.createElement('div');
+                weeksContainer.className = 'calendar-weeks';
+                let currentWeekEl = this.createWeekElement();
+                weeksContainer.appendChild(currentWeekEl);
+
+                for (let i = 0; i < startingDayOfWeek; i++) currentWeekEl.appendChild(this.createDayElement(null, true));
+                for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
+                    const dayDate = new Date(year, month, dayNum);
+                    const dateStr = this.formatDate(dayDate);
+                    currentWeekEl.appendChild(this.createDayElement({
+                        date: dayDate, dateStr, dayNumber: dayNum,
+                        isToday: dateStr === todayStr,
+                        hasActivity: !!this.activityData[dateStr] 
+                    }));
+                    if ((startingDayOfWeek + dayNum) % 7 === 0 && dayNum < daysInMonth) {
+                        currentWeekEl = this.createWeekElement();
+                        weeksContainer.appendChild(currentWeekEl);
+                    }
+                }
+                let lastDayOfWeek = (startingDayOfWeek + daysInMonth - 1) % 7;
+                let remainingDays = (6 - lastDayOfWeek + 7) % 7;
+                if (remainingDays === 7 && daysInMonth > 0) remainingDays = 0;
+                for (let i = 0; i < remainingDays; i++) currentWeekEl.appendChild(this.createDayElement(null, true));
+                
+                this.gridEl.appendChild(weeksContainer);
+                this.drawActivityStreakPills(); 
+            }
+            
+            createWeekElement() { const el=document.createElement('div'); el.className='calendar-week'; return el; }
+            createDayElement(dayData, isOtherMonthPlaceholder = false) { 
+                const dayElement = document.createElement('div');
+                dayElement.className = 'calendar-day';
+                if (isOtherMonthPlaceholder) {
+                    dayElement.classList.add('other-month');
+                } else if (dayData) {
+                    dayElement.dataset.dateStr = dayData.dateStr;
+                    if (dayData.isToday) {
+                        dayElement.classList.add('today');
+                    }
+                    const dayNumberDiv = document.createElement('div');
+                    dayNumberDiv.className = 'day-number';
+                    dayNumberDiv.textContent = dayData.dayNumber;
+                    dayElement.appendChild(dayNumberDiv);
+                    dayElement.addEventListener('click', () => this.handleDayClick(dayData.dateStr, dayElement));
+                }
+                return dayElement;
+            }
+
+            // MODIFIED drawActivityStreakPills
+            drawActivityStreakPills() {
+                if (!this.gridEl) return;
+                const weeks = this.gridEl.querySelectorAll('.calendar-week');
+                weeks.forEach(weekEl => {
+                    weekEl.querySelectorAll('.activity-streak-pill').forEach(pill => pill.remove());
+                    weekEl.querySelectorAll('.calendar-day.single-active-day').forEach(d => d.classList.remove('single-active-day'));
+
+                    const daysInWeek = Array.from(weekEl.querySelectorAll('.calendar-day:not(.other-month)'));
+                    let currentStreak = [];
+                    for (let i = 0; i < daysInWeek.length; i++) {
+                        const day = daysInWeek[i];
+                        const dateStr = day.dataset.dateStr;
+                        
+                        if (dateStr && this.activityData[dateStr] && !day.classList.contains('today')) {
+                            currentStreak.push(day);
+                        } else {
+                            // End of a potential streak or a non-active/today day encountered
+                            if (currentStreak.length > 1) {
+                                this.createStreakPillElement(weekEl, currentStreak);
+                                // Also color the day circles within the pill streak
+                                currentStreak.forEach(dInStreak => dInStreak.classList.add('single-active-day'));
+                            } else if (currentStreak.length === 1) {
+                                currentStreak[0].classList.add('single-active-day');
+                            }
+                            currentStreak = []; // Reset for next potential streak
+
+                            // Handle the current day (which broke the streak or was non-streaking active)
+                            if (dateStr && this.activityData[dateStr] && !day.classList.contains('today')) {
+                                // This handles a single active day that is not 'today'
+                                day.classList.add('single-active-day');
+                            }
+                        }
+                    }
+                    // Process any streak at the very end of the week
+                    if (currentStreak.length > 1) {
+                        this.createStreakPillElement(weekEl, currentStreak);
+                        // Also color the day circles within the pill streak
+                        currentStreak.forEach(dInStreak => dInStreak.classList.add('single-active-day'));
+                    } else if (currentStreak.length === 1) {
+                        currentStreak[0].classList.add('single-active-day');
+                    }
+                });
+            }
+
+            createStreakPillElement(weekElement, streakDays) {
+                if (streakDays.length < 2) return;
+                const firstDayElement = streakDays[0], lastDayElement = streakDays[streakDays.length - 1];
+                if (!firstDayElement || !lastDayElement || !firstDayElement.offsetParent || !lastDayElement.offsetParent) return; 
+                const pill = document.createElement('div'); pill.className = 'activity-streak-pill';
+                const weekRect = weekElement.getBoundingClientRect();
+                const firstDayRect = firstDayElement.getBoundingClientRect();
+                const lastDayRect = lastDayElement.getBoundingClientRect();
+                let pillLeft = (firstDayRect.left - weekRect.left) + (firstDayElement.offsetWidth / 2);
+                let pillRight = (lastDayRect.left - weekRect.left) + (lastDayElement.offsetWidth / 2);
+                let pillWidth = pillRight - pillLeft;
+                pill.style.left = `${pillLeft}px`; pill.style.width = `${pillWidth}px`;
+                if (pillWidth >= (firstDayElement.offsetWidth * 0.8)) weekElement.appendChild(pill);
+            }
+
+            handleDayClick(dateStr, clickedDayElement) { // MODIFIED
+                this.selectedDateStr = dateStr; 
+                if (this.gridEl) {
+                    this.gridEl.querySelectorAll('.calendar-day.selected').forEach(el => el.classList.remove('selected'));
+                }
+                if (clickedDayElement) clickedDayElement.classList.add('selected');
+                
+                const formattedDateForTitle = new Date(dateStr + 'T00:00:00').toLocaleDateString();
+                openMemoryEntryModal(`Add Memory for ${formattedDateForTitle}`, dateStr);
+                
+                console.log(`Day selected for add: ${dateStr}. Month's memories still displayed below.`);
+            }
+
+            async displayMemoriesForCurrentMonth() { 
+                if (!dom.memoriesListInline || !dom.noMemoriesInline || !dom.dayMemoriesTitle) {
+                    console.error("DOM elements for displaying month memories not found.");
+                    return;
+                }
+                const year = this.currentDate.getFullYear();
+                const month = this.currentDate.getMonth(); 
+                const firstDayOfMonthStr = this.formatDate(new Date(year, month, 1));
+                const lastDayOfMonthStr = this.formatDate(new Date(year, month + 1, 0));
+
+                dom.dayMemoriesTitle.textContent = `Memories for ${this.currentDate.toLocaleString('default', { month: 'long' })} ${year}`;
+                dom.memoriesListInline.innerHTML = ''; 
+
+                try {
+                    const memories = await getMemoriesForDateRangeFromDB(firstDayOfMonthStr, lastDayOfMonthStr);
+                    if (memories.length > 0) {
+                        dom.noMemoriesInline.style.display = 'none';
+                        let lastDisplayedDate = null;
+                        memories.forEach(mem => {
+                            const memoryDate = new Date(mem.date + 'T00:00:00'); 
+                            const memoryDateStrDisplay = memoryDate.toLocaleDateString([], { month:'long', day:'numeric'});
+                            
+                            if(lastDisplayedDate !== mem.date) {
+                                const dateHeaderLi = document.createElement('li');
+                                dateHeaderLi.className = 'memory-date-header';
+                                dateHeaderLi.textContent = memoryDateStrDisplay;
+                                dom.memoriesListInline.appendChild(dateHeaderLi);
+                                lastDisplayedDate = mem.date;
+                            }
+
+                            const li = document.createElement('li');
+                            const time = new Date(mem.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+                            li.innerHTML = `<span class="memory-time">${mem.type} at ${time}</span> <div class="memory-text">${escapeHTML(mem.text)}</div>`;
+                            dom.memoriesListInline.appendChild(li);
+                        });
+                    } else {
+                        dom.noMemoriesInline.textContent = `No memories for ${this.currentDate.toLocaleString('default', { month: 'long' })} ${year}.`;
+                        dom.noMemoriesInline.style.display = 'block';
+                    }
+                } catch (error) { 
+                    console.error("Error fetching memories for month:", error); 
+                    dom.memoriesListInline.innerHTML = '<li>Error loading memories.</li>'; 
+                    dom.noMemoriesInline.style.display = 'none'; 
+                }
+            }
+            
+            attachEventListeners() { 
+                if(this.prevBtn) this.prevBtn.addEventListener('click', async () => { 
+                    this.currentDate.setMonth(this.currentDate.getMonth() - 1); 
+                    this.renderCalendarGrid(); 
+                    await this.displayMemoriesForCurrentMonth(); 
+                });
+                if(this.nextBtn) this.nextBtn.addEventListener('click', async () => { 
+                    this.currentDate.setMonth(this.currentDate.getMonth() + 1); 
+                    this.renderCalendarGrid(); 
+                    await this.displayMemoriesForCurrentMonth(); 
+                });
+            }
+        }
+
+        function setupMainMemoryForm() { 
+            const memoryForm = dom.memoryForm; 
+            const memoryModal = dom.memoryEntryModal; 
+            const typeOptions = memoryForm.querySelectorAll('.type-option');
+            const audioControls = memoryForm.querySelector('#audioControls');
+            const pictureControls = memoryForm.querySelector('#pictureControls');
+            const recordBtn = memoryForm.querySelector('#recordBtn');
+            const recordingStatus = memoryForm.querySelector('#recordingStatus');
+            const pictureStatus = memoryForm.querySelector('#pictureStatus');
+            const memoryTextEl = memoryForm.querySelector('#memoryText');
+            const memoryDateEl = dom.memoryDateInput; 
+
+            let selectedType = 'message';
+            let isRecording = false, hasAudio = false, hasPicture = false;
+            let recordingDuration = 0, recordingInterval;
+
+            if (!memoryForm || !memoryModal || typeOptions.length === 0) { console.error("Main memory form components missing."); return; }
+            typeOptions.forEach(option => { option.addEventListener('click', () => { typeOptions.forEach(opt => opt.classList.remove('active')); option.classList.add('active'); selectedType = option.dataset.type; if(audioControls) audioControls.classList.toggle('active', selectedType === 'audio'); if(pictureControls) pictureControls.classList.toggle('active', selectedType === 'picture'); }); });
+            if(recordBtn) recordBtn.addEventListener('click', () => { if (!isRecording) { isRecording = true; hasAudio = false; recordingDuration = 0; recordBtn.textContent = '⏹️ Stop Recording'; recordBtn.classList.add('recording'); if(recordingStatus) recordingStatus.textContent = 'Recording... 0:00'; let s=0; recordingInterval = setInterval(() => { s++; recordingDuration=s; if(recordingStatus) recordingStatus.textContent = `Recording... ${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;},1000); setTimeout(() => { if(isRecording)stopLocalRecording();},60000);} else { stopLocalRecording();}});
+            function stopLocalRecording() { if (!isRecording || !recordBtn) return; clearInterval(recordingInterval); isRecording=false; hasAudio=true; recordBtn.textContent = '🎤 Record Again'; recordBtn.classList.remove('recording'); if(recordingStatus) recordingStatus.textContent = `Saved! (${Math.floor(recordingDuration/60)}:${(recordingDuration%60).toString().padStart(2,'0')})`;}
+            const camBtn = memoryForm.querySelector('#cameraBtn'), galBtn = memoryForm.querySelector('#galleryBtn');
+            if(camBtn) camBtn.addEventListener('click', () => { if(pictureStatus)pictureStatus.textContent='Taking photo...'; setTimeout(() => { hasPicture=true; if(pictureStatus)pictureStatus.textContent='📷 Photo captured!';},1500);});
+            if(galBtn) galBtn.addEventListener('click', () => { if(pictureStatus)pictureStatus.textContent='Opening gallery...'; setTimeout(() => { hasPicture=true; if(pictureStatus)pictureStatus.textContent='🖼️ Photo selected!';},1000);});
+            memoryForm.addEventListener('submit', async (e) => {
+                e.preventDefault(); if(!memoryTextEl || !memoryDateEl) return;
+                const text = memoryTextEl.value.trim(), dateInput = memoryDateEl.value;
+                if (!text || !dateInput) { console.error('Text/Date required.'); return; }
+                try {
+                    const memData = {type:selectedType,text,date:dateInput,audioData:selectedType==='audio'?'sim_audio.mp3':null,pictureData:selectedType==='picture'?'sim_image.jpg':null,duration:selectedType==='audio'?`${Math.floor(recordingDuration/60)}:${(recordingDuration%60).toString().padStart(2,'0')}`:null};
+                    await saveMemoryToDB(memData);
+                    const allMems = await getAllMemoriesFromDB(); updateMemoryStats(allMems.length);
+                    if(activityCalendarInstance) await activityCalendarInstance.refreshDataAndRender(); 
+                    resetMainMemoryForm(); if(memoryModal) memoryModal.classList.remove('active');
+                } catch (err) { console.error('Failed to save memory from main form:', err); }
+            });
+            function resetMainMemoryForm() {
+                if(memoryForm)memoryForm.reset(); if(memoryDateEl)memoryDateEl.valueAsDate=new Date();
+                typeOptions.forEach(o=>o.classList.remove('active')); if(typeOptions.length>0)typeOptions[0].classList.add('active');
+                selectedType='message'; if(audioControls)audioControls.classList.remove('active'); if(pictureControls)pictureControls.classList.remove('active');
+                isRecording=false;hasAudio=false;hasPicture=false;recordingDuration=0; if(recordingInterval)clearInterval(recordingInterval);
+                if(recordingStatus)recordingStatus.textContent=''; if(pictureStatus)pictureStatus.textContent='';
+                if(recordBtn){recordBtn.textContent='🎤 Start Recording';recordBtn.classList.remove('recording');}
+            }
+        }
+
+        function handleSwipe(direction) { 
+             if (direction==='up'&&window.scrollY<10&&dom.headerSection&&dom.headerSection.offsetHeight>=window.innerHeight*0.95) window.scrollTo({top:100,behavior:'smooth'}); 
+             else if (direction==='down'&&window.scrollY<parseFloat(getComputedStyle(dom.root).getPropertyValue('--scroll-distance-for-full-effect').trim())) window.scrollTo({top:0,behavior:'smooth'});
+        }
+    </script>
+</body>
+</html>
